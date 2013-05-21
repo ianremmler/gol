@@ -22,7 +22,7 @@ const (
 	goalSize      = 200
 	playerRadius  = 10
 	playerMass    = 1
-	ballRadius    = 20
+	ballRadius    = 10
 	ballMass      = 0.1
 )
 
@@ -354,7 +354,7 @@ func playerPos(team int) chipmunk.Vect {
 	if team == 0 {
 		pos.X *= -1
 	}
-	gs := 0.5 * goalSize
+	gs := 0.25 * fieldHeight
 	len := pos.Length()
 	if len < gs {
 		pos = pos.Div(len).Mul(gs)
