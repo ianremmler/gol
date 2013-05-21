@@ -16,6 +16,7 @@ const (
 	updateTime    = time.Second / 24
 	pauseTime     = time.Second
 	headStartTime = time.Second
+	maxScore      = 10
 	fieldWidth    = 1000
 	fieldHeight   = 500
 	edgeSize      = 16
@@ -177,25 +178,33 @@ func (g *Gol) sim() {
 			if ballX < 0 {
 				team = 1
 			}
-			otherTeam := 1 - team
 			g.score[team]++
-			g.ball.body.SetPosition(chipmunk.Vect{})
-			g.ball.body.SetVelocity(chipmunk.Vect{})
-			// disable control for a bit
-			for _, player := range g.players {
-				player.body.SetPosition(playerPos(player.team))
-				player.body.SetVelocity(chipmunk.Vect{})
-				if g.pauseTicks[player.team] == 0 {
-					g.space.RemoveConstraint(player.cursorJoint)
-				}
+			if g.score[0] >= maxScore || g.score[1] >= maxScore {
+				g.score[0], g.score[1] = 0, 0
 			}
-			// give the team that was scored on a little head start for "kickoff"
-			g.pauseTicks[team] = int((pauseTime + headStartTime) / simTime)
-			g.pauseTicks[otherTeam] = int(pauseTime / simTime)
+			g.kickoff(team)
 		}
 
 		g.mu.Unlock()
 	}
+}
+
+func (g *Gol) kickoff(team int) {
+	otherTeam := 1 - team
+
+	g.ball.body.SetPosition(chipmunk.Vect{})
+	g.ball.body.SetVelocity(chipmunk.Vect{})
+	for _, player := range g.players {
+		player.body.SetPosition(playerPos(player.team))
+		player.body.SetVelocity(chipmunk.Vect{})
+		if g.pauseTicks[player.team] == 0 {
+			// disable control for a bit
+			g.space.RemoveConstraint(player.cursorJoint)
+		}
+	}
+	// give the team that was scored on a little head start for "kickoff"
+	g.pauseTicks[team] = int((pauseTime + headStartTime) / simTime)
+	g.pauseTicks[otherTeam] = int(pauseTime / simTime)
 }
 
 func (g *Gol) clientCtrl(client *gordian.Client) {
@@ -318,12 +327,6 @@ func (g *Gol) handleMessage(msg *gordian.Message) {
 func (g *Gol) update() {
 	g.mu.Lock()
 
-	if g.score[0] > 99 || g.score[1] > 99 {
-		g.score[0], g.score[1] = 0, 0
-		for _, player := range g.players {
-			player.body.SetPosition(chipmunk.Vect{})
-		}
-	}
 	state := stateMsg{
 		Players: map[string]Player{},
 		Ball:    Ball{g.ball.body.Position()},
