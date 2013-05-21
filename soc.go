@@ -6,6 +6,7 @@ import (
 
 	"fmt"
 	"math"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -16,7 +17,7 @@ const (
 	stunTime     = time.Second / 2
 	fieldWidth   = 1000
 	fieldHeight  = 500
-	edgeSize     = 8
+	edgeSize     = 16
 	goalSize     = 200
 	playerRadius = 10
 	playerMass   = 1
@@ -25,9 +26,7 @@ const (
 )
 
 const (
-	playerType = 1 << iota
-	edgeType
-	ballType
+	normType = 1 << iota
 	goalType
 )
 
@@ -95,7 +94,6 @@ func NewSoc() *Soc {
 
 func (s *Soc) setup() {
 	s.space = chipmunk.SpaceNew()
-	s.space.SetEnableContactGraph(true)
 	s.space.SetDamping(0.1)
 	hfw, hfh, hgs := 0.5*fieldWidth, 0.5*fieldHeight, 0.5*goalSize
 	sidePts := []chipmunk.Vect{{-hfw, hgs}, {-hfw, hfh}, {hfw, hfh}, {hfw, hgs}}
@@ -107,14 +105,14 @@ func (s *Soc) setup() {
 			p0.Y *= sign
 			p1.Y *= sign
 			fieldSeg := chipmunk.SegmentShapeNew(s.space.StaticBody(), p0, p1, 0.5*edgeSize)
-			fieldSeg.SetCollisionType(edgeType)
+			fieldSeg.SetLayers(normType)
 			fieldSeg.SetElasticity(1.0)
 			fieldSeg.SetFriction(1.0)
 			s.space.AddShape(fieldSeg)
 		}
 		p0, p1 := chipmunk.Vect{sign * hfw, -hgs}, chipmunk.Vect{sign * hfw, hgs}
 		goal := chipmunk.SegmentShapeNew(s.space.StaticBody(), p0, p1, 0.5*edgeSize)
-		goal.SetCollisionType(goalType)
+		goal.SetLayers(goalType)
 		goal.SetElasticity(1.0)
 		goal.SetFriction(1.0)
 		s.space.AddShape(goal)
@@ -123,7 +121,7 @@ func (s *Soc) setup() {
 	s.ball.body = chipmunk.BodyNew(ballMass, moment)
 	s.space.AddBody(s.ball.body)
 	s.ball.shape = chipmunk.CircleShapeNew(s.ball.body, ballRadius, chipmunk.Origin())
-	s.ball.shape.SetCollisionType(ballType)
+	s.ball.shape.SetLayers(normType)
 	s.ball.shape.SetElasticity(0.9)
 	s.ball.shape.SetFriction(0.1)
 	s.space.AddShape(s.ball.shape)
@@ -156,14 +154,20 @@ func (s *Soc) sim() {
 		s.mu.Lock()
 
 		s.space.Step(float64(simTime) / float64(time.Second))
-		// 		for _, player := range s.players {
-		// 			player.body.EachArbiter(checkCollision)
-		// 			if player.state == deadState {
-		// 				otherTeam := 1 - player.team
-		// 				s.score[otherTeam]++
-		// 			}
-		// 		}
-		s.ball.body.EachArbiter(checkGoal)
+		ballX := s.ball.body.Position().X
+		if math.Abs(ballX) > fieldWidth/2 {
+			team := 0
+			if ballX < 0 {
+				team = 1
+			}
+			s.score[team]++
+			s.ball.body.SetPosition(chipmunk.Vect{})
+			s.ball.body.SetVelocity(chipmunk.Vect{})
+			for _, player := range s.players {
+				player.body.SetPosition(playerPos(player.team))
+				player.body.SetVelocity(chipmunk.Vect{})
+			}
+		}
 
 		s.mu.Unlock()
 	}
@@ -178,17 +182,22 @@ func (s *Soc) clientCtrl(client *gordian.Client) {
 	}
 }
 
-func (s *Soc) smallerTeam() int {
+func (s *Soc) nextTeam() int {
 	t0Size := 0
 	for _, player := range s.players {
 		if player.team == 0 {
 			t0Size++
 		}
 	}
-	if 2*t0Size <= len(s.players) {
+	diff := len(s.players) - 2*t0Size
+	switch {
+	case diff > 0:
 		return 0
+	case diff < 0:
+		return 1
+	default:
+		return rand.Int() % 2
 	}
-	return 1
 }
 
 func (s *Soc) connect(client *gordian.Client) {
@@ -210,17 +219,19 @@ func (s *Soc) connect(client *gordian.Client) {
 	player.body.SetUserData(client.Id)
 	s.space.AddBody(player.body)
 	player.shape = chipmunk.CircleShapeNew(player.body, playerRadius, chipmunk.Origin())
-	player.shape.SetCollisionType(playerType)
+	player.shape.SetLayers(normType)
 	player.shape.SetElasticity(0.9)
 	player.shape.SetFriction(0.1)
 	s.space.AddShape(player.shape)
 
 	player.cursorBody = chipmunk.BodyNew(math.Inf(0), math.Inf(0))
 	player.cursorJoint = chipmunk.PivotJointNew2(player.cursorBody, player.body,
-		chipmunk.Origin(), chipmunk.Origin())
+		chipmunk.Vect{}, chipmunk.Vect{})
 	player.cursorJoint.SetMaxForce(1000.0)
 	s.space.AddConstraint(player.cursorJoint)
-	player.team = s.smallerTeam()
+	player.team = s.nextTeam()
+	player.body.SetPosition(playerPos(player.team))
+
 	s.players[player.id] = player
 
 	s.mu.Unlock()
@@ -312,16 +323,16 @@ func (s *Soc) update() {
 	}
 }
 
-func checkGoal(body chipmunk.Body, arb chipmunk.Arbiter) {
-	if !arb.IsFirstContact() {
-		return
+func playerPos(team int) chipmunk.Vect {
+	fw, fh := 0.5*fieldWidth, 0.5*fieldHeight
+	pos := chipmunk.Vect{rand.Float64() * fw, rand.Float64()*(2*fh) - fh}
+	if team == 0 {
+		pos.X *= -1
 	}
-	// 	soc := body.Space().UserData().(*Soc)
-	_, otherShape := arb.Shapes()
-
-	switch otherShape.CollisionType() {
-	case goalType:
-		body.SetPosition(chipmunk.Vect{})
-		body.SetVelocity(chipmunk.Vect{})
+	gs := 0.5 * goalSize
+	len := pos.Length()
+	if len < gs {
+		pos = pos.Div(len).Mul(gs)
 	}
+	return pos
 }

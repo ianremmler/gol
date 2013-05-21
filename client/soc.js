@@ -12,57 +12,107 @@ function setup(conf) {
 	config = conf;
 	stage = new Kinetic.Stage({
 		container: 'container',
-		width: config.FieldWidth,
-		height: config.FieldHeight,
+		width: conf.FieldWidth,
+		height: conf.FieldHeight + 200,
 		scale: { x: 1, y: -1 },
-		offset: { x: -config.FieldWidth / 2.0, y: config.FieldHeight / 2.0 }
+		offset: { x: -conf.FieldWidth / 2, y: conf.FieldHeight / 2 }
 	});
 	layer = new Kinetic.Layer();
 
+	var hfw = conf.FieldWidth / 2 - 4;
+	var hfh = conf.FieldHeight / 2 - 4;
+	var hgh = conf.GoalSize / 2;
+
+	// field
 	layer.add(new Kinetic.Rect({
-		x: -config.FieldWidth / 2,
-		y: -config.FieldHeight / 2,
-		width: config.FieldWidth,
-		height: config.FieldHeight,
+		x: -hfw,
+		y: -hfh,
+		width: 2 * hfw,
+		height: 2 * hfh,
 		fill: 'lightgreen',
 		stroke: 'black',
 		strokeWidth: 8
 	}));
 
+	// center circle
+	layer.add(new Kinetic.Circle({
+		radius: conf.FieldHeight / 4,
+		stroke: 'white',
+		strokeWidth: 4
+	}));
+
+	// midfield line
+	layer.add(new Kinetic.Line({
+		points: [0, -hfh, 0, hfh],
+		stroke: 'white',
+		strokeWidth: 4
+	}));
+
+	// touch line
 	for (var i = 0; i < 2; i++) {
-		var side = 2 * i - 1;
+		var s = 2 * i - 1;
 		layer.add(new Kinetic.Line({
 			points: [
-				side * config.FieldWidth / 2, -config.GoalSize / 2,
-				side * config.FieldWidth / 2, config.GoalSize / 2
+				-hfw, s * (hgh + 2),
+				-hfw, s * hfh,
+				hfw, s * hfh,
+				hfw, s * (hgh + 2)
 			],
 			stroke: 'white',
-			strokeWidth: 8
+			strokeWidth: 4
 		}));
 	}
 
+	// goal box
+	for (i = 0; i < 2; i++) {
+		s = 2 * i - 1;
+		layer.add(new Kinetic.Line({
+			points: [
+				s * hfw, -(hgh + 4),
+				s * (hfw - hgh), -(hgh + 4),
+				s * (hfw - hgh), hgh + 4,
+				s * hfw, hgh + 4
+			],
+			stroke: 'white',
+			strokeWidth: 4
+		}));
+	}
+
+	// goal line
+	for (i = 0; i < 2; i++) {
+		s = 2 * i - 1;
+		layer.add(new Kinetic.Line({
+			points: [s * hfw, -hgh, s * hfw, hgh],
+			stroke: teamColor[i],
+			strokeWidth: 4
+		}));
+	}
+
+	// ball
 	ball = new Kinetic.Circle({
-		radius: config.BallRadius,
+		radius: conf.BallRadius,
 		fill: 'white',
 		stroke: 'black',
 		strokeWidth: 4
 	});
 	layer.add(ball);
 
+	// local player marker
 	me = new Kinetic.Circle({
 		x: 0,
 		y: 0,
 		radius: 4,
-		fill: 'yellow'
+		fill: 'white'
 	});
 	layer.add(me);
 
+	// score
 	for (i = 0; i < 2; i++) {
 		var text = new Kinetic.Text({
 			fontSize: 72,
 			fontFamily: 'monospace',
-			x: (config.FieldWidth / 2 - 50) * (2 * i - 1) - 50,
-			y: -config.FieldWidth / 2 + 100,
+			x: 100 * (2 * i - 1) - 50,
+			y: -conf.FieldHeight / 2,
 			width: 100,
 			height: 200,
 			text: '0',
