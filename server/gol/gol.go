@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/ianremmler/soc"
+	"github.com/ianremmler/gol"
 	"code.google.com/p/go.net/websocket"
 
 	"go/build"
@@ -13,11 +13,11 @@ import (
 
 func main() {
 	rand.Seed(time.Now().UTC().UnixNano())
-	soc := soc.NewSoc()
-	soc.Run()
+	gol := gol.NewGol()
+	gol.Run()
 
-	clientDir := build.Default.GOPATH + "/src/github.com/ianremmler/soc/client"
-	http.Handle("/soc/", websocket.Handler(soc.WSHandler))
+	clientDir := build.Default.GOPATH + "/src/github.com/ianremmler/gol/client"
+	http.Handle("/gol/", websocket.Handler(gol.WSHandler))
 	http.Handle("/", http.FileServer(http.Dir(clientDir)))
 	port := ":8000"
 	if len(os.Args) > 1 {

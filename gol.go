@@ -1,4 +1,4 @@
-package soc
+package gol
 
 import (
 	"github.com/ianremmler/gochipmunk/chipmunk"
@@ -69,7 +69,7 @@ type stateMsg struct {
 	Score   []int
 }
 
-type Soc struct {
+type Gol struct {
 	players     map[gordian.ClientId]*player
 	ball        ball
 	score       []int
@@ -82,8 +82,8 @@ type Soc struct {
 	*gordian.Gordian
 }
 
-func NewSoc() *Soc {
-	s := &Soc{
+func NewGol() *Gol {
+	g := &Gol{
 		players:     map[gordian.ClientId]*player{},
 		score:       []int{0, 0},
 		pauseTicks:  []int{0, 0},
@@ -91,13 +91,13 @@ func NewSoc() *Soc {
 		updateTimer: time.Tick(updateTime),
 		Gordian:     gordian.New(24),
 	}
-	s.setup()
-	return s
+	g.setup()
+	return g
 }
 
-func (s *Soc) setup() {
-	s.space = chipmunk.SpaceNew()
-	s.space.SetDamping(0.1)
+func (g *Gol) setup() {
+	g.space = chipmunk.SpaceNew()
+	g.space.SetDamping(0.1)
 	hfw, hfh, hgs := 0.5*fieldWidth, 0.5*fieldHeight, 0.5*goalSize
 	sidePts := []chipmunk.Vect{{-hfw, hgs}, {-hfw, hfh}, {hfw, hfh}, {hfw, hgs}}
 	numSideSegs := len(sidePts) - 1
@@ -107,114 +107,114 @@ func (s *Soc) setup() {
 			p0, p1 := sidePts[j], sidePts[j+1]
 			p0.Y *= sign
 			p1.Y *= sign
-			fieldSeg := chipmunk.SegmentShapeNew(s.space.StaticBody(), p0, p1, 0.5*edgeSize)
+			fieldSeg := chipmunk.SegmentShapeNew(g.space.StaticBody(), p0, p1, 0.5*edgeSize)
 			fieldSeg.SetLayers(normType)
 			fieldSeg.SetElasticity(1.0)
 			fieldSeg.SetFriction(1.0)
-			s.space.AddShape(fieldSeg)
+			g.space.AddShape(fieldSeg)
 		}
 		p0, p1 := chipmunk.Vect{sign * hfw, -hgs}, chipmunk.Vect{sign * hfw, hgs}
-		goal := chipmunk.SegmentShapeNew(s.space.StaticBody(), p0, p1, 0.5*edgeSize)
+		goal := chipmunk.SegmentShapeNew(g.space.StaticBody(), p0, p1, 0.5*edgeSize)
 		goal.SetLayers(goalType)
 		goal.SetElasticity(1.0)
 		goal.SetFriction(1.0)
-		s.space.AddShape(goal)
+		g.space.AddShape(goal)
 	}
 	moment := chipmunk.MomentForCircle(ballMass, 0, ballRadius, chipmunk.Origin())
-	s.ball.body = chipmunk.BodyNew(ballMass, moment)
-	s.space.AddBody(s.ball.body)
-	s.ball.shape = chipmunk.CircleShapeNew(s.ball.body, ballRadius, chipmunk.Origin())
-	s.ball.shape.SetLayers(normType)
-	s.ball.shape.SetElasticity(0.9)
-	s.ball.shape.SetFriction(0.1)
-	s.space.AddShape(s.ball.shape)
-	s.space.SetUserData(s)
+	g.ball.body = chipmunk.BodyNew(ballMass, moment)
+	g.space.AddBody(g.ball.body)
+	g.ball.shape = chipmunk.CircleShapeNew(g.ball.body, ballRadius, chipmunk.Origin())
+	g.ball.shape.SetLayers(normType)
+	g.ball.shape.SetElasticity(0.9)
+	g.ball.shape.SetFriction(0.1)
+	g.space.AddShape(g.ball.shape)
+	g.space.SetUserData(g)
 }
 
-func (s *Soc) Run() {
-	go s.run()
-	go s.sim()
-	s.Gordian.Run()
+func (g *Gol) Run() {
+	go g.run()
+	go g.sim()
+	g.Gordian.Run()
 }
 
-func (s *Soc) run() {
+func (g *Gol) run() {
 	for {
 		select {
-		case client := <-s.Control:
-			s.clientCtrl(client)
-		case msg := <-s.InBox:
-			s.handleMessage(&msg)
-		case <-s.updateTimer:
-			s.update()
+		case client := <-g.Control:
+			g.clientCtrl(client)
+		case msg := <-g.InBox:
+			g.handleMessage(&msg)
+		case <-g.updateTimer:
+			g.update()
 		}
 	}
 }
 
-func (s *Soc) sim() {
+func (g *Gol) sim() {
 	for {
-		<-s.simTimer
+		<-g.simTimer
 
-		s.mu.Lock()
+		g.mu.Lock()
 
-		s.space.Step(float64(simTime) / float64(time.Second))
+		g.space.Step(float64(simTime) / float64(time.Second))
 
 		// enable control if pause is ending
-		for _, player := range s.players {
-			if s.pauseTicks[player.team] == 1 {
-				s.space.AddConstraint(player.cursorJoint)
+		for _, player := range g.players {
+			if g.pauseTicks[player.team] == 1 {
+				g.space.AddConstraint(player.cursorJoint)
 			}
 		}
 		// update pause countdown
-		for i := range s.pauseTicks {
-			if s.pauseTicks[i] > 0 {
-				s.pauseTicks[i]--
+		for i := range g.pauseTicks {
+			if g.pauseTicks[i] > 0 {
+				g.pauseTicks[i]--
 			}
 		}
 		// check for goals
-		ballX := s.ball.body.Position().X
+		ballX := g.ball.body.Position().X
 		if math.Abs(ballX) > fieldWidth/2 { // GOL!
 			team := 0
 			if ballX < 0 {
 				team = 1
 			}
 			otherTeam := 1 - team
-			s.score[team]++
-			s.ball.body.SetPosition(chipmunk.Vect{})
-			s.ball.body.SetVelocity(chipmunk.Vect{})
+			g.score[team]++
+			g.ball.body.SetPosition(chipmunk.Vect{})
+			g.ball.body.SetVelocity(chipmunk.Vect{})
 			// disable control for a bit
-			for _, player := range s.players {
+			for _, player := range g.players {
 				player.body.SetPosition(playerPos(player.team))
 				player.body.SetVelocity(chipmunk.Vect{})
-				if s.pauseTicks[player.team] == 0 {
-					s.space.RemoveConstraint(player.cursorJoint)
+				if g.pauseTicks[player.team] == 0 {
+					g.space.RemoveConstraint(player.cursorJoint)
 				}
 			}
 			// give the team that was scored on a little head start for "kickoff"
-			s.pauseTicks[team] = int((pauseTime + headStartTime) / simTime)
-			s.pauseTicks[otherTeam] = int(pauseTime / simTime)
+			g.pauseTicks[team] = int((pauseTime + headStartTime) / simTime)
+			g.pauseTicks[otherTeam] = int(pauseTime / simTime)
 		}
 
-		s.mu.Unlock()
+		g.mu.Unlock()
 	}
 }
 
-func (s *Soc) clientCtrl(client *gordian.Client) {
+func (g *Gol) clientCtrl(client *gordian.Client) {
 	switch client.Ctrl {
 	case gordian.Connect:
-		s.connect(client)
+		g.connect(client)
 	case gordian.Close:
-		s.close(client)
+		g.close(client)
 	}
 }
 
-func (s *Soc) nextTeam() int {
+func (g *Gol) nextTeam() int {
 	t0Size := 0
-	for _, player := range s.players {
+	for _, player := range g.players {
 		if player.team == 0 {
 			t0Size++
 		}
 	}
-	diff := len(s.players) - 2*t0Size
+	diff := len(g.players) - 2*t0Size
 	switch {
 	case diff > 0:
 		return 0
@@ -225,41 +225,41 @@ func (s *Soc) nextTeam() int {
 	}
 }
 
-func (s *Soc) connect(client *gordian.Client) {
-	s.curId++
+func (g *Gol) connect(client *gordian.Client) {
+	g.curId++
 
-	client.Id = s.curId
+	client.Id = g.curId
 	client.Ctrl = gordian.Register
-	s.Control <- client
-	client = <-s.Control
+	g.Control <- client
+	client = <-g.Control
 	if client.Ctrl != gordian.Establish {
 		return
 	}
 
-	s.mu.Lock()
+	g.mu.Lock()
 
 	player := &player{id: client.Id}
 	moment := chipmunk.MomentForCircle(playerMass, 0, playerRadius, chipmunk.Origin())
 	player.body = chipmunk.BodyNew(playerMass, moment)
 	player.body.SetUserData(client.Id)
-	s.space.AddBody(player.body)
+	g.space.AddBody(player.body)
 	player.shape = chipmunk.CircleShapeNew(player.body, playerRadius, chipmunk.Origin())
 	player.shape.SetLayers(normType)
 	player.shape.SetElasticity(0.9)
 	player.shape.SetFriction(0.1)
-	s.space.AddShape(player.shape)
+	g.space.AddShape(player.shape)
 
 	player.cursorBody = chipmunk.BodyNew(math.Inf(0), math.Inf(0))
 	player.cursorJoint = chipmunk.PivotJointNew2(player.cursorBody, player.body,
 		chipmunk.Vect{}, chipmunk.Vect{})
 	player.cursorJoint.SetMaxForce(1000.0)
-	s.space.AddConstraint(player.cursorJoint)
-	player.team = s.nextTeam()
+	g.space.AddConstraint(player.cursorJoint)
+	player.team = g.nextTeam()
 	player.body.SetPosition(playerPos(player.team))
 
-	s.players[player.id] = player
+	g.players[player.id] = player
 
-	s.mu.Unlock()
+	g.mu.Unlock()
 
 	data := configMsg{
 		FieldWidth:   fieldWidth,
@@ -274,33 +274,33 @@ func (s *Soc) connect(client *gordian.Client) {
 		Type: "config",
 		Data: data,
 	}
-	s.OutBox <- msg
+	g.OutBox <- msg
 }
 
-func (s *Soc) close(client *gordian.Client) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (g *Gol) close(client *gordian.Client) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 
-	player, ok := s.players[client.Id]
+	player, ok := g.players[client.Id]
 	if !ok {
 		return
 	}
-	s.space.RemoveConstraint(player.cursorJoint)
+	g.space.RemoveConstraint(player.cursorJoint)
 	player.cursorJoint.Free()
-	s.space.RemoveBody(player.body)
-	s.space.RemoveShape(player.shape)
+	g.space.RemoveBody(player.body)
+	g.space.RemoveShape(player.shape)
 	player.body.Free()
 	player.shape.Free()
 	player.cursorBody.Free()
-	delete(s.players, client.Id)
+	delete(g.players, client.Id)
 }
 
-func (s *Soc) handleMessage(msg *gordian.Message) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (g *Gol) handleMessage(msg *gordian.Message) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 
 	id := msg.From
-	player, ok := s.players[id]
+	player, ok := g.players[id]
 	if !ok {
 		return
 	}
@@ -315,36 +315,36 @@ func (s *Soc) handleMessage(msg *gordian.Message) {
 	}
 }
 
-func (s *Soc) update() {
-	s.mu.Lock()
+func (g *Gol) update() {
+	g.mu.Lock()
 
-	if s.score[0] > 99 || s.score[1] > 99 {
-		s.score[0], s.score[1] = 0, 0
-		for _, player := range s.players {
+	if g.score[0] > 99 || g.score[1] > 99 {
+		g.score[0], g.score[1] = 0, 0
+		for _, player := range g.players {
 			player.body.SetPosition(chipmunk.Vect{})
 		}
 	}
 	state := stateMsg{
 		Players: map[string]Player{},
-		Ball:    Ball{s.ball.body.Position()},
-		Score:   s.score,
+		Ball:    Ball{g.ball.body.Position()},
+		Score:   g.score,
 	}
-	for i, player := range s.players {
+	for i, player := range g.players {
 		state.Players[fmt.Sprintf("%d", i)] = Player{
 			Pos:  player.body.Position(),
 			Team: player.team,
 		}
 	}
 
-	s.mu.Unlock()
+	g.mu.Unlock()
 
 	msg := gordian.Message{
 		Type: "state",
 		Data: state,
 	}
-	for id := range s.players {
+	for id := range g.players {
 		msg.To = id
-		s.OutBox <- msg
+		g.OutBox <- msg
 	}
 }
 

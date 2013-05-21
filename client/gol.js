@@ -139,7 +139,7 @@ function newPlayer(team) {
 	return player;
 }
 
-var ws = new WebSocket("ws://" + window.location.host + "/soc/");
+var ws = new WebSocket("ws://" + window.location.host + "/gol/");
 ws.onmessage = function(evt) {
 	msg = JSON.parse(evt.data);
 	switch (msg.type) {
