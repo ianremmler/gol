@@ -29,7 +29,7 @@ function setup(conf) {
 		y: -hfh,
 		width: 2 * hfw,
 		height: 2 * hfh,
-		fill: 'lightgreen',
+		fill: 'green',
 		stroke: 'black',
 		strokeWidth: 8
 	}));

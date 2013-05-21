@@ -12,17 +12,18 @@ import (
 )
 
 const (
-	simTime      = time.Second / 60
-	updateTime   = time.Second / 24
-	stunTime     = time.Second / 2
-	fieldWidth   = 1000
-	fieldHeight  = 500
-	edgeSize     = 16
-	goalSize     = 200
-	playerRadius = 10
-	playerMass   = 1
-	ballRadius   = 20
-	ballMass     = 0.1
+	simTime       = time.Second / 60
+	updateTime    = time.Second / 24
+	pauseTime     = time.Second
+	headStartTime = time.Second
+	fieldWidth    = 1000
+	fieldHeight   = 500
+	edgeSize      = 16
+	goalSize      = 200
+	playerRadius  = 10
+	playerMass    = 1
+	ballRadius    = 20
+	ballMass      = 0.1
 )
 
 const (
@@ -72,6 +73,7 @@ type Soc struct {
 	players     map[gordian.ClientId]*player
 	ball        ball
 	score       []int
+	pauseTicks  []int
 	simTimer    <-chan time.Time
 	updateTimer <-chan time.Time
 	curId       int
@@ -84,6 +86,7 @@ func NewSoc() *Soc {
 	s := &Soc{
 		players:     map[gordian.ClientId]*player{},
 		score:       []int{0, 0},
+		pauseTicks:  []int{0, 0},
 		simTimer:    time.Tick(simTime),
 		updateTimer: time.Tick(updateTime),
 		Gordian:     gordian.New(24),
@@ -154,19 +157,41 @@ func (s *Soc) sim() {
 		s.mu.Lock()
 
 		s.space.Step(float64(simTime) / float64(time.Second))
+
+		// enable control if pause is ending
+		for _, player := range s.players {
+			if s.pauseTicks[player.team] == 1 {
+				s.space.AddConstraint(player.cursorJoint)
+			}
+		}
+		// update pause countdown
+		for i := range s.pauseTicks {
+			if s.pauseTicks[i] > 0 {
+				s.pauseTicks[i]--
+			}
+		}
+		// check for goals
 		ballX := s.ball.body.Position().X
-		if math.Abs(ballX) > fieldWidth/2 {
+		if math.Abs(ballX) > fieldWidth/2 { // GOL!
 			team := 0
 			if ballX < 0 {
 				team = 1
 			}
+			otherTeam := 1 - team
 			s.score[team]++
 			s.ball.body.SetPosition(chipmunk.Vect{})
 			s.ball.body.SetVelocity(chipmunk.Vect{})
+			// disable control for a bit
 			for _, player := range s.players {
 				player.body.SetPosition(playerPos(player.team))
 				player.body.SetVelocity(chipmunk.Vect{})
+				if s.pauseTicks[player.team] == 0 {
+					s.space.RemoveConstraint(player.cursorJoint)
+				}
 			}
+			// give the team that was scored on a little head start for "kickoff"
+			s.pauseTicks[team] = int((pauseTime + headStartTime) / simTime)
+			s.pauseTicks[otherTeam] = int(pauseTime / simTime)
 		}
 
 		s.mu.Unlock()
