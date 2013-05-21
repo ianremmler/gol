@@ -13,7 +13,7 @@ function setup(conf) {
 	stage = new Kinetic.Stage({
 		container: 'container',
 		width: conf.FieldWidth,
-		height: conf.FieldHeight + 200,
+		height: conf.FieldHeight + 100,
 		scale: { x: 1, y: -1 },
 		offset: { x: -conf.FieldWidth / 2, y: conf.FieldHeight / 2 }
 	});
@@ -112,9 +112,9 @@ function setup(conf) {
 			fontSize: 72,
 			fontFamily: 'monospace',
 			x: 100 * (2 * i - 1) - 50,
-			y: -conf.FieldHeight / 2,
+			y: -conf.FieldHeight / 2 - 15,
 			width: 100,
-			height: 200,
+			height: 85,
 			text: '0',
 			align: 'center',
 			stroke: 'gray',
