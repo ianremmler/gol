@@ -143,7 +143,6 @@ func (g *Gol) setup() {
 	g.ball.shape.SetElasticity(0.9)
 	g.ball.shape.SetFriction(0.1)
 	g.space.AddShape(g.ball.shape)
-	g.space.SetUserData(g)
 }
 
 func (g *Gol) Run() {
@@ -248,6 +247,48 @@ func (g *Gol) nextTeam() int {
 	}
 }
 
+func (g *Gol) addPlayer(id gordian.ClientId) *player {
+	player := &player{id: id, team: g.nextTeam()}
+
+	moment := chipmunk.MomentForCircle(playerMass, 0, playerRadius, chipmunk.Origin())
+	player.body = chipmunk.BodyNew(playerMass, moment)
+	g.space.AddBody(player.body)
+
+	player.shape = chipmunk.CircleShapeNew(player.body, playerRadius, chipmunk.Origin())
+	player.shape.SetLayers(normLayer | goalLayer)
+	player.shape.SetElasticity(0.9)
+	player.shape.SetFriction(0.1)
+	g.space.AddShape(player.shape)
+
+	player.cursorBody = chipmunk.BodyNew(math.Inf(0), math.Inf(0))
+	player.cursorJoint = chipmunk.PivotJointNew2(player.cursorBody, player.body,
+		chipmunk.Vect{}, chipmunk.Vect{})
+	player.cursorJoint.SetMaxForce(1000.0)
+	g.space.AddConstraint(player.cursorJoint)
+
+	g.players[player.id] = player
+
+	return player
+}
+
+func (g *Gol) removePlayer(id gordian.ClientId) {
+	player, ok := g.players[id]
+	if !ok {
+		return
+	}
+	if player.cursorJoint.Space() == g.space {
+		g.space.RemoveConstraint(player.cursorJoint)
+	}
+	player.cursorJoint.Free()
+	g.space.RemoveBody(player.body)
+	g.space.RemoveShape(player.shape)
+	player.body.Free()
+	player.shape.Free()
+	player.cursorBody.Free()
+
+	delete(g.players, id)
+}
+
 func (g *Gol) connect(client *gordian.Client) {
 	g.curId++
 
@@ -261,26 +302,8 @@ func (g *Gol) connect(client *gordian.Client) {
 
 	g.mu.Lock()
 
-	player := &player{id: client.Id}
-	moment := chipmunk.MomentForCircle(playerMass, 0, playerRadius, chipmunk.Origin())
-	player.body = chipmunk.BodyNew(playerMass, moment)
-	player.body.SetUserData(client.Id)
-	g.space.AddBody(player.body)
-	player.shape = chipmunk.CircleShapeNew(player.body, playerRadius, chipmunk.Origin())
-	player.shape.SetLayers(normLayer | goalLayer)
-	player.shape.SetElasticity(0.9)
-	player.shape.SetFriction(0.1)
-	g.space.AddShape(player.shape)
-
-	player.cursorBody = chipmunk.BodyNew(math.Inf(0), math.Inf(0))
-	player.cursorJoint = chipmunk.PivotJointNew2(player.cursorBody, player.body,
-		chipmunk.Vect{}, chipmunk.Vect{})
-	player.cursorJoint.SetMaxForce(1000.0)
-	g.space.AddConstraint(player.cursorJoint)
-	player.team = g.nextTeam()
+	player := g.addPlayer(client.Id)
 	player.place()
-
-	g.players[player.id] = player
 
 	g.mu.Unlock()
 
@@ -290,10 +313,10 @@ func (g *Gol) connect(client *gordian.Client) {
 		GoalSize:     goalSize,
 		PlayerRadius: playerRadius,
 		BallRadius:   ballRadius,
-		Id:           fmt.Sprintf("%d", player.id),
+		Id:           fmt.Sprintf("%d", client.Id),
 	}
 	msg := gordian.Message{
-		To:   player.id,
+		To:   client.Id,
 		Type: "config",
 		Data: data,
 	}
@@ -304,18 +327,7 @@ func (g *Gol) close(client *gordian.Client) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	player, ok := g.players[client.Id]
-	if !ok {
-		return
-	}
-	g.space.RemoveConstraint(player.cursorJoint)
-	player.cursorJoint.Free()
-	g.space.RemoveBody(player.body)
-	g.space.RemoveShape(player.shape)
-	player.body.Free()
-	player.shape.Free()
-	player.cursorBody.Free()
-	delete(g.players, client.Id)
+	g.removePlayer(client.Id)
 }
 
 func (g *Gol) handleMessage(msg *gordian.Message) {
