@@ -21,7 +21,7 @@ function setup(conf) {
 
 	var hfw = conf.FieldWidth / 2 - 4;
 	var hfh = conf.FieldHeight / 2 - 4;
-	var hgh = conf.GoalSize / 2;
+	var hgh = conf.GoalSize / 2 - 4;
 
 	// field
 	layer.add(new Kinetic.Rect({
@@ -53,10 +53,10 @@ function setup(conf) {
 		var s = 2 * i - 1;
 		layer.add(new Kinetic.Line({
 			points: [
-				-hfw, s * (hgh + 2),
+				-hfw, s * hgh,
 				-hfw, s * hfh,
 				hfw, s * hfh,
-				hfw, s * (hgh + 2)
+				hfw, s * hgh
 			],
 			stroke: 'white',
 			strokeWidth: 4
@@ -68,10 +68,10 @@ function setup(conf) {
 		s = 2 * i - 1;
 		layer.add(new Kinetic.Line({
 			points: [
-				s * hfw, -(hgh + 4),
-				s * (hfw - hgh), -(hgh + 4),
-				s * (hfw - hgh), hgh + 4,
-				s * hfw, hgh + 4
+				s * hfw, -(hgh + 2),
+				s * (hfw - hgh), -(hgh + 2),
+				s * (hfw - hgh), (hgh + 2),
+				s * hfw, (hgh + 2)
 			],
 			stroke: 'white',
 			strokeWidth: 4
@@ -82,7 +82,7 @@ function setup(conf) {
 	for (i = 0; i < 2; i++) {
 		s = 2 * i - 1;
 		layer.add(new Kinetic.Line({
-			points: [s * hfw, -hgh, s * hfw, hgh],
+			points: [s * hfw, -(hgh - 2), s * hfw, (hgh - 2)],
 			stroke: teamColor[i],
 			strokeWidth: 4
 		}));

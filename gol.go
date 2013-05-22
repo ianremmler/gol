@@ -28,8 +28,8 @@ const (
 )
 
 const (
-	normType = 1 << iota
-	goalType
+	normLayer = 1 << iota
+	goalLayer
 )
 
 type player struct {
@@ -109,14 +109,14 @@ func (g *Gol) setup() {
 			p0.Y *= sign
 			p1.Y *= sign
 			fieldSeg := chipmunk.SegmentShapeNew(g.space.StaticBody(), p0, p1, 0.5*edgeSize)
-			fieldSeg.SetLayers(normType)
+			fieldSeg.SetLayers(normLayer)
 			fieldSeg.SetElasticity(1.0)
 			fieldSeg.SetFriction(1.0)
 			g.space.AddShape(fieldSeg)
 		}
 		p0, p1 := chipmunk.Vect{sign * hfw, -hgs}, chipmunk.Vect{sign * hfw, hgs}
 		goal := chipmunk.SegmentShapeNew(g.space.StaticBody(), p0, p1, 0.5*edgeSize)
-		goal.SetLayers(goalType)
+		goal.SetLayers(goalLayer)
 		goal.SetElasticity(1.0)
 		goal.SetFriction(1.0)
 		g.space.AddShape(goal)
@@ -125,7 +125,7 @@ func (g *Gol) setup() {
 	g.ball.body = chipmunk.BodyNew(ballMass, moment)
 	g.space.AddBody(g.ball.body)
 	g.ball.shape = chipmunk.CircleShapeNew(g.ball.body, ballRadius, chipmunk.Origin())
-	g.ball.shape.SetLayers(normType)
+	g.ball.shape.SetLayers(normLayer)
 	g.ball.shape.SetElasticity(0.9)
 	g.ball.shape.SetFriction(0.1)
 	g.space.AddShape(g.ball.shape)
@@ -253,7 +253,7 @@ func (g *Gol) connect(client *gordian.Client) {
 	player.body.SetUserData(client.Id)
 	g.space.AddBody(player.body)
 	player.shape = chipmunk.CircleShapeNew(player.body, playerRadius, chipmunk.Origin())
-	player.shape.SetLayers(normType)
+	player.shape.SetLayers(normLayer | goalLayer)
 	player.shape.SetElasticity(0.9)
 	player.shape.SetFriction(0.1)
 	g.space.AddShape(player.shape)
@@ -352,12 +352,12 @@ func (g *Gol) update() {
 }
 
 func playerPos(team int) chipmunk.Vect {
-	fw, fh := 0.5*fieldWidth, 0.5*fieldHeight
+	fw, fh := 0.5*fieldWidth - playerRadius, 0.5*fieldHeight - playerRadius
 	pos := chipmunk.Vect{rand.Float64() * fw, rand.Float64()*(2*fh) - fh}
 	if team == 0 {
 		pos.X *= -1
 	}
-	gs := 0.25 * fieldHeight
+	gs := 0.25 * fieldHeight + playerRadius
 	len := pos.Length()
 	if len < gs {
 		pos = pos.Div(len).Mul(gs)
