@@ -191,6 +191,13 @@ function updateScore(score) {
 }
 
 function sendState() {
+	var pos = stage.getPointerPosition();
+	if (pos) {
+		state.Pos = {
+			X: pos.x - config.FieldWidth / 2,
+			Y: config.FieldHeight / 2 - pos.y
+		};
+	}
 	var msg = {
 		type: 'player',
 		data: state
@@ -201,11 +208,4 @@ function sendState() {
 function anim() {
 	requestAnimationFrame(anim);
 	stage.draw();
-	var pos = stage.getPointerPosition();
-	if (pos) {
-		state.Pos = {
-		   	X: pos.x - config.FieldWidth / 2,
-		   	Y: config.FieldHeight / 2 - pos.y
-	   	};
-	}
 }
