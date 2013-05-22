@@ -42,15 +42,17 @@ type player struct {
 }
 
 func (p *player) place() {
-	hfw, hfh := 0.5*fieldWidth-playerRadius, 0.5*fieldHeight-playerRadius
-	pos := chipmunk.Vect{rand.Float64() * hfw, rand.Float64()*(2*hfh) - hfh}
-	if p.team == 0 {
-		pos.X = -pos.X
+	widthRange := 0.5*fieldWidth - 2*playerRadius
+	heightRange := 0.5*fieldHeight - playerRadius
+	sign := float64(2*p.team - 1)
+	pos := chipmunk.Vect{
+		(widthRange*rand.Float64() + playerRadius) * sign,
+		heightRange * (2*rand.Float64() - 1),
 	}
 	minDist := 0.25*fieldHeight + playerRadius
-	len := pos.Length()
-	if len < minDist {
-		pos = pos.Div(len).Mul(minDist)
+	dist := pos.Length()
+	if dist < minDist {
+		pos = pos.Mul(minDist / dist)
 	}
 	p.body.SetPosition(pos)
 }
@@ -117,7 +119,7 @@ func (g *Gol) setup() {
 	sidePts := []chipmunk.Vect{{-hfw, hgs}, {-hfw, hfh}, {hfw, hfh}, {hfw, hgs}}
 	numSideSegs := len(sidePts) - 1
 	for i := 0; i < 2; i++ {
-		sign := 2*float64(i) - 1
+		sign := float64(2*i - 1)
 		for j := 0; j < numSideSegs; j++ {
 			p0, p1 := sidePts[j], sidePts[j+1]
 			p0.Y *= sign
