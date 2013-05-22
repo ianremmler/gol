@@ -170,7 +170,7 @@ func (g *Gol) sim() {
 
 		g.mu.Lock()
 
-		g.space.Step(float64(simTime) / float64(time.Second))
+		g.space.Step(simTime.Seconds())
 		g.handlePauses()
 		g.handleGoals()
 
