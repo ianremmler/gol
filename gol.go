@@ -171,34 +171,40 @@ func (g *Gol) sim() {
 		g.mu.Lock()
 
 		g.space.Step(float64(simTime) / float64(time.Second))
-
-		// enable control if pause is ending
-		for _, player := range g.players {
-			if g.pauseTicks[player.team] == 1 {
-				g.space.AddConstraint(player.cursorJoint)
-			}
-		}
-		// update pause countdown
-		for i := range g.pauseTicks {
-			if g.pauseTicks[i] > 0 {
-				g.pauseTicks[i]--
-			}
-		}
-		// check for goals
-		ballX := g.ball.body.Position().X
-		if math.Abs(ballX) > fieldWidth/2 { // GOL!
-			team := 0
-			if ballX < 0 {
-				team = 1
-			}
-			g.score[team]++
-			if g.score[0] >= maxScore || g.score[1] >= maxScore {
-				g.score[0], g.score[1] = 0, 0
-			}
-			g.kickoff(team)
-		}
+		g.handlePauses()
+		g.handleGoals()
 
 		g.mu.Unlock()
+	}
+}
+
+func (g *Gol) handlePauses() {
+	// enable control if pause is ending
+	for _, player := range g.players {
+		if g.pauseTicks[player.team] == 1 && player.cursorJoint.Space() != g.space {
+			g.space.AddConstraint(player.cursorJoint)
+		}
+	}
+	// update pause countdown
+	for i := range g.pauseTicks {
+		if g.pauseTicks[i] > 0 {
+			g.pauseTicks[i]--
+		}
+	}
+}
+
+func (g *Gol) handleGoals() {
+	ballX := g.ball.body.Position().X
+	if math.Abs(ballX) > fieldWidth/2 { // GOL!
+		team := 0
+		if ballX < 0 {
+			team = 1
+		}
+		g.score[team]++
+		if g.score[0] >= maxScore || g.score[1] >= maxScore {
+			g.score[0], g.score[1] = 0, 0
+		}
+		g.kickoff(team)
 	}
 }
 
@@ -210,7 +216,7 @@ func (g *Gol) kickoff(team int) {
 	for _, player := range g.players {
 		player.place()
 		player.body.SetVelocity(chipmunk.Vect{})
-		if g.pauseTicks[player.team] == 0 {
+		if g.pauseTicks[player.team] == 0 && player.cursorJoint.Space() == g.space {
 			// disable control for a bit
 			g.space.RemoveConstraint(player.cursorJoint)
 		}
@@ -230,20 +236,17 @@ func (g *Gol) clientCtrl(client *gordian.Client) {
 }
 
 func (g *Gol) nextTeam() int {
-	t0Size := 0
+	teamSize := []int{0, 0}
 	for _, player := range g.players {
-		if player.team == 0 {
-			t0Size++
-		}
+		teamSize[player.team]++
 	}
-	diff := len(g.players) - 2*t0Size
 	switch {
-	case diff > 0:
+	case teamSize[0] < teamSize[1]:
 		return 0
-	case diff < 0:
+	case teamSize[0] > teamSize[1]:
 		return 1
 	default:
-		return rand.Int() % 2
+		return rand.Intn(2)
 	}
 }
 
