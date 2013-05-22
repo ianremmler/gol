@@ -13,7 +13,7 @@ import (
 
 func main() {
 	rand.Seed(time.Now().UTC().UnixNano())
-	gol := gol.NewGol()
+	gol := gol.New()
 	gol.Run()
 
 	clientDir := build.Default.GOPATH + "/src/github.com/ianremmler/gol/client"

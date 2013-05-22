@@ -19,7 +19,7 @@ const (
 	maxScore      = 10
 	fieldWidth    = 1000
 	fieldHeight   = 500
-	edgeSize      = 16
+	edgeRadius    = 8
 	goalSize      = 200
 	playerRadius  = 10
 	playerMass    = 1
@@ -39,6 +39,20 @@ type player struct {
 	shape       chipmunk.Shape
 	cursorBody  chipmunk.Body
 	cursorJoint chipmunk.Constraint
+}
+
+func (p *player) place() {
+	hfw, hfh := 0.5*fieldWidth-playerRadius, 0.5*fieldHeight-playerRadius
+	pos := chipmunk.Vect{rand.Float64() * hfw, rand.Float64()*(2*hfh) - hfh}
+	if p.team == 0 {
+		pos.X = -pos.X
+	}
+	minDist := 0.25*fieldHeight + playerRadius
+	len := pos.Length()
+	if len < minDist {
+		pos = pos.Div(len).Mul(minDist)
+	}
+	p.body.SetPosition(pos)
 }
 
 type ball struct {
@@ -83,7 +97,7 @@ type Gol struct {
 	*gordian.Gordian
 }
 
-func NewGol() *Gol {
+func New() *Gol {
 	g := &Gol{
 		players:     map[gordian.ClientId]*player{},
 		score:       []int{0, 0},
@@ -108,14 +122,14 @@ func (g *Gol) setup() {
 			p0, p1 := sidePts[j], sidePts[j+1]
 			p0.Y *= sign
 			p1.Y *= sign
-			fieldSeg := chipmunk.SegmentShapeNew(g.space.StaticBody(), p0, p1, 0.5*edgeSize)
+			fieldSeg := chipmunk.SegmentShapeNew(g.space.StaticBody(), p0, p1, edgeRadius)
 			fieldSeg.SetLayers(normLayer)
 			fieldSeg.SetElasticity(1.0)
 			fieldSeg.SetFriction(1.0)
 			g.space.AddShape(fieldSeg)
 		}
 		p0, p1 := chipmunk.Vect{sign * hfw, -hgs}, chipmunk.Vect{sign * hfw, hgs}
-		goal := chipmunk.SegmentShapeNew(g.space.StaticBody(), p0, p1, 0.5*edgeSize)
+		goal := chipmunk.SegmentShapeNew(g.space.StaticBody(), p0, p1, edgeRadius)
 		goal.SetLayers(goalLayer)
 		goal.SetElasticity(1.0)
 		goal.SetFriction(1.0)
@@ -195,7 +209,7 @@ func (g *Gol) kickoff(team int) {
 	g.ball.body.SetPosition(chipmunk.Vect{})
 	g.ball.body.SetVelocity(chipmunk.Vect{})
 	for _, player := range g.players {
-		player.body.SetPosition(playerPos(player.team))
+		player.place()
 		player.body.SetVelocity(chipmunk.Vect{})
 		if g.pauseTicks[player.team] == 0 {
 			// disable control for a bit
@@ -264,7 +278,7 @@ func (g *Gol) connect(client *gordian.Client) {
 	player.cursorJoint.SetMaxForce(1000.0)
 	g.space.AddConstraint(player.cursorJoint)
 	player.team = g.nextTeam()
-	player.body.SetPosition(playerPos(player.team))
+	player.place()
 
 	g.players[player.id] = player
 
@@ -349,18 +363,4 @@ func (g *Gol) update() {
 		msg.To = id
 		g.OutBox <- msg
 	}
-}
-
-func playerPos(team int) chipmunk.Vect {
-	fw, fh := 0.5*fieldWidth - playerRadius, 0.5*fieldHeight - playerRadius
-	pos := chipmunk.Vect{rand.Float64() * fw, rand.Float64()*(2*fh) - fh}
-	if team == 0 {
-		pos.X *= -1
-	}
-	gs := 0.25 * fieldHeight + playerRadius
-	len := pos.Length()
-	if len < gs {
-		pos = pos.Div(len).Mul(gs)
-	}
-	return pos
 }
