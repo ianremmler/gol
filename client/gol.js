@@ -117,7 +117,7 @@ function setup(conf) {
 			height: 85,
 			text: '0',
 			align: 'center',
-			stroke: 'gray',
+			stroke: 'black',
 			fill: teamColor[i],
 			scale: { x: 1, y: -1 }
 		});
