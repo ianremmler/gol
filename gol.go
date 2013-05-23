@@ -57,6 +57,17 @@ func (p *player) place() {
 	p.body.SetPosition(pos)
 }
 
+func (p *player) enableCursorJoint(enable bool) {
+	sp := p.body.Space()
+	isEnabled := sp.Contains(p.cursorJoint.(chipmunk.PivotJoint))
+	switch {
+	case enable && !isEnabled:
+		sp.AddConstraint(p.cursorJoint)
+	case !enable && isEnabled:
+		sp.RemoveConstraint(p.cursorJoint)
+	}
+}
+
 type ball struct {
 	body  chipmunk.Body
 	shape chipmunk.Shape
@@ -183,8 +194,8 @@ func (g *Gol) sim() {
 func (g *Gol) handlePauses() {
 	// enable control if pause is ending
 	for _, player := range g.players {
-		if g.pauseTicks[player.team] == 1 && player.cursorJoint.Space() != g.space {
-			g.space.AddConstraint(player.cursorJoint)
+		if g.pauseTicks[player.team] == 1 {
+			player.enableCursorJoint(true)
 		}
 	}
 	// update pause countdown
@@ -218,9 +229,9 @@ func (g *Gol) kickoff(team int) {
 	for _, player := range g.players {
 		player.place()
 		player.body.SetVelocity(chipmunk.Vect{})
-		if g.pauseTicks[player.team] == 0 && player.cursorJoint.Space() == g.space {
+		if g.pauseTicks[player.team] == 0 {
 			// disable control for a bit
-			g.space.RemoveConstraint(player.cursorJoint)
+			player.enableCursorJoint(false)
 		}
 	}
 	// give the team that was scored on a little head start for "kickoff"
@@ -269,7 +280,7 @@ func (g *Gol) addPlayer(id gordian.ClientId) *player {
 	player.cursorJoint = chipmunk.PivotJointNew2(player.cursorBody, player.body,
 		chipmunk.Vect{}, chipmunk.Vect{})
 	player.cursorJoint.SetMaxForce(1000.0)
-	g.space.AddConstraint(player.cursorJoint)
+	player.enableCursorJoint(true)
 
 	g.players[player.id] = player
 
@@ -281,9 +292,7 @@ func (g *Gol) removePlayer(id gordian.ClientId) {
 	if !ok {
 		return
 	}
-	if player.cursorJoint.Space() == g.space {
-		g.space.RemoveConstraint(player.cursorJoint)
-	}
+	player.enableCursorJoint(false)
 	player.cursorJoint.Free()
 	g.space.RemoveBody(player.body)
 	g.space.RemoveShape(player.shape)
