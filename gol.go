@@ -229,10 +229,7 @@ func (g *Gol) kickoff(team int) {
 	for _, player := range g.players {
 		player.place()
 		player.body.SetVelocity(chipmunk.Vect{})
-		if g.pauseTicks[player.team] == 0 {
-			// disable control for a bit
-			player.enableCursorJoint(false)
-		}
+		player.enableCursorJoint(false) // disable control for a bit
 	}
 	// give the team that was scored on a little head start for "kickoff"
 	g.pauseTicks[team] = int((pauseTime + headStartTime) / simTime)
