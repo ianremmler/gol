@@ -148,10 +148,10 @@ func (g *Gol) setup() {
 		goal.SetFriction(1.0)
 		g.space.AddShape(goal)
 	}
-	moment := chipmunk.MomentForCircle(ballMass, 0, ballRadius, chipmunk.Origin())
+	moment := chipmunk.MomentForCircle(ballMass, 0, ballRadius, chipmunk.Vect{})
 	g.ball.body = chipmunk.BodyNew(ballMass, moment)
 	g.space.AddBody(g.ball.body)
-	g.ball.shape = chipmunk.CircleShapeNew(g.ball.body, ballRadius, chipmunk.Origin())
+	g.ball.shape = chipmunk.CircleShapeNew(g.ball.body, ballRadius, chipmunk.Vect{})
 	g.ball.shape.SetLayers(normLayer)
 	g.ball.shape.SetElasticity(0.9)
 	g.ball.shape.SetFriction(0.1)
@@ -263,11 +263,11 @@ func (g *Gol) nextTeam() int {
 func (g *Gol) addPlayer(id gordian.ClientId) *player {
 	player := &player{id: id, team: g.nextTeam()}
 
-	moment := chipmunk.MomentForCircle(playerMass, 0, playerRadius, chipmunk.Origin())
+	moment := chipmunk.MomentForCircle(playerMass, 0, playerRadius, chipmunk.Vect{})
 	player.body = chipmunk.BodyNew(playerMass, moment)
 	g.space.AddBody(player.body)
 
-	player.shape = chipmunk.CircleShapeNew(player.body, playerRadius, chipmunk.Origin())
+	player.shape = chipmunk.CircleShapeNew(player.body, playerRadius, chipmunk.Vect{})
 	player.shape.SetLayers(normLayer | goalLayer)
 	player.shape.SetElasticity(0.9)
 	player.shape.SetFriction(0.1)
