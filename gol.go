@@ -106,7 +106,7 @@ type Gol struct {
 	updateTimer <-chan time.Time
 	curId       int
 	space       *chipmunk.Space
-	mu          sync.Mutex
+	sync.Mutex
 	*gordian.Gordian
 }
 
@@ -181,13 +181,13 @@ func (g *Gol) sim() {
 	for {
 		<-g.simTimer
 
-		g.mu.Lock()
+		g.Lock()
 
 		g.space.Step(simTime.Seconds())
 		g.handlePauses()
 		g.handleGoals()
 
-		g.mu.Unlock()
+		g.Unlock()
 	}
 }
 
@@ -311,12 +311,12 @@ func (g *Gol) connect(client *gordian.Client) {
 		return
 	}
 
-	g.mu.Lock()
+	g.Lock()
 
 	player := g.addPlayer(client.Id)
 	player.place()
 
-	g.mu.Unlock()
+	g.Unlock()
 
 	data := configMsg{
 		FieldWidth:   fieldWidth,
@@ -335,15 +335,15 @@ func (g *Gol) connect(client *gordian.Client) {
 }
 
 func (g *Gol) close(client *gordian.Client) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
+	g.Lock()
+	defer g.Unlock()
 
 	g.removePlayer(client.Id)
 }
 
 func (g *Gol) handleMessage(msg *gordian.Message) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
+	g.Lock()
+	defer g.Unlock()
 
 	id := msg.From
 	player, ok := g.players[id]
@@ -362,7 +362,7 @@ func (g *Gol) handleMessage(msg *gordian.Message) {
 }
 
 func (g *Gol) update() {
-	g.mu.Lock()
+	g.Lock()
 
 	state := stateMsg{
 		Players: map[string]Player{},
@@ -376,7 +376,7 @@ func (g *Gol) update() {
 		}
 	}
 
-	g.mu.Unlock()
+	g.Unlock()
 
 	msg := gordian.Message{
 		Type: "state",
