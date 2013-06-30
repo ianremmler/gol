@@ -105,7 +105,7 @@ type Gol struct {
 	simTimer    <-chan time.Time
 	updateTimer <-chan time.Time
 	curId       int
-	space       *chipmunk.Space
+	space       chipmunk.Space
 	sync.Mutex
 	*gordian.Gordian
 }
