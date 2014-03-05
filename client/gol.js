@@ -166,9 +166,9 @@ function updatePlayers(curPlayers) {
 		}
 		var x = curPlayers[id].Pos.X;
 		var y = curPlayers[id].Pos.Y;
-		players[id].setPosition(x, y);
+		players[id].position({x: x, y: y});
 		if (id == config.Id) {
-			me.setPosition(x, y);
+			me.position({x: x, y: y});
 			me.moveToTop();
 		}
 	}
@@ -181,12 +181,12 @@ function updatePlayers(curPlayers) {
 }
 
 function updateBall(bal) {
-	ball.setPosition(bal.Pos.X, bal.Pos.Y);
+	ball.position({x: bal.Pos.X, y: bal.Pos.Y});
 }
 
 function updateScore(score) {
 	for (var idx in score) {
-		scoreboard[idx].setText(score[idx]);
+		scoreboard[idx].text(score[idx]);
 	}
 }
 
@@ -207,5 +207,6 @@ function sendState() {
 
 function anim() {
 	requestAnimationFrame(anim);
+	console.log("draw");
 	stage.draw();
 }
