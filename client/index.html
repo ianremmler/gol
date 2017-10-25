@@ -3,13 +3,11 @@
 	<head>
 		<meta charset="UTF-8">
 		<title>gol</title>
+		<link rel="stylesheet" href="style.css">
 	</head>
 
-	<body>
-		<div id="container"></div>
-
-		<script src="jquery-2.1.0.min.js"></script>
-		<script src="kinetic-v5.0.1.min.js"></script>
+	<body onresize="resizeField()">
+		<canvas id="field"></canvas>
 		<script src="gol.js"></script>
 	</body>
 </html>

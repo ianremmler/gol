@@ -1,8 +1,8 @@
 package gol
 
 import (
-	"github.com/ianremmler/chipmunk"
 	"github.com/ianremmler/gordian"
+	"github.com/jakecoffman/cp"
 
 	"fmt"
 	"math"
@@ -13,53 +13,53 @@ import (
 
 const (
 	simTime       = time.Second / 60
-	updateTime    = time.Second / 24
+	updateTime    = time.Second / 30
 	pauseTime     = time.Second
 	headStartTime = time.Second
 	maxScore      = 10
 	fieldWidth    = 1000
 	fieldHeight   = 500
-	edgeRadius    = 8
+	edgeRadius    = 5
 	goalSize      = 200
-	playerRadius  = 10
+	playerRadius  = 15
 	playerMass    = 1
 	ballRadius    = 10
-	ballMass      = 0.1
+	ballMass      = 0.05
 )
 
 const (
-	normLayer = 1 << iota
-	goalLayer
+	normType = 1 << (iota + 1)
+	goalType
 )
 
 type player struct {
 	id          gordian.ClientId
 	team        int
-	body        chipmunk.Body
-	shape       chipmunk.Shape
-	cursorBody  chipmunk.Body
-	cursorJoint chipmunk.Constraint
+	body        *cp.Body
+	shape       *cp.Shape
+	cursorBody  *cp.Body
+	cursorJoint *cp.Constraint
 }
 
 func (p *player) place() {
 	widthRange := 0.5*fieldWidth - 2*playerRadius
 	heightRange := 0.5*fieldHeight - playerRadius
 	sign := float64(2*p.team - 1)
-	pos := chipmunk.Vect{
+	pos := cp.Vector{
 		(widthRange*rand.Float64() + playerRadius) * sign,
 		heightRange * (2*rand.Float64() - 1),
 	}
 	minDist := 0.25*fieldHeight + playerRadius
 	dist := pos.Length()
 	if dist < minDist {
-		pos = pos.Mul(minDist / dist)
+		pos = pos.Mult(minDist / dist)
 	}
 	p.body.SetPosition(pos)
 }
 
 func (p *player) enableCursorJoint(enable bool) {
-	sp := p.body.Space()
-	isEnabled := sp.Contains(p.cursorJoint.(chipmunk.PivotJoint))
+	sp := p.shape.Space()
+	isEnabled := sp.ContainsConstraint(p.cursorJoint)
 	switch {
 	case enable && !isEnabled:
 		sp.AddConstraint(p.cursorJoint)
@@ -69,17 +69,17 @@ func (p *player) enableCursorJoint(enable bool) {
 }
 
 type ball struct {
-	body  chipmunk.Body
-	shape chipmunk.Shape
+	body  *cp.Body
+	shape *cp.Shape
 }
 
 type Player struct {
-	Pos  chipmunk.Vect
+	Pos  cp.Vector
 	Team int
 }
 
 type Ball struct {
-	Pos chipmunk.Vect
+	Pos cp.Vector
 }
 
 type configMsg struct {
@@ -89,6 +89,7 @@ type configMsg struct {
 	GoalSize     float64
 	PlayerRadius float64
 	BallRadius   float64
+	EdgeRadius   float64
 }
 
 type stateMsg struct {
@@ -105,7 +106,7 @@ type Gol struct {
 	simTimer    <-chan time.Time
 	updateTimer <-chan time.Time
 	curId       int
-	space       chipmunk.Space
+	space       *cp.Space
 	sync.Mutex
 	*gordian.Gordian
 }
@@ -124,10 +125,10 @@ func New() *Gol {
 }
 
 func (g *Gol) setup() {
-	g.space = chipmunk.SpaceNew()
-	g.space.SetDamping(0.1)
+	g.space = cp.NewSpace()
+	g.space.SetDamping(0.25)
 	hfw, hfh, hgs := 0.5*fieldWidth, 0.5*fieldHeight, 0.5*goalSize
-	sidePts := []chipmunk.Vect{{-hfw, hgs}, {-hfw, hfh}, {hfw, hfh}, {hfw, hgs}}
+	sidePts := []cp.Vector{{-hfw, hgs}, {-hfw, hfh}, {hfw, hfh}, {hfw, hgs}}
 	numSideSegs := len(sidePts) - 1
 	for i := 0; i < 2; i++ {
 		sign := float64(2*i - 1)
@@ -135,27 +136,30 @@ func (g *Gol) setup() {
 			p0, p1 := sidePts[j], sidePts[j+1]
 			p0.Y *= sign
 			p1.Y *= sign
-			fieldSeg := chipmunk.SegmentShapeNew(g.space.StaticBody(), p0, p1, edgeRadius)
-			fieldSeg.SetLayers(normLayer)
+			fieldSeg := cp.NewSegment(g.space.StaticBody, p0, p1, edgeRadius)
+			fieldSeg.SetCollisionType(normType)
 			fieldSeg.SetElasticity(1.0)
 			fieldSeg.SetFriction(1.0)
 			g.space.AddShape(fieldSeg)
 		}
-		p0, p1 := chipmunk.Vect{sign * hfw, -hgs}, chipmunk.Vect{sign * hfw, hgs}
-		goal := chipmunk.SegmentShapeNew(g.space.StaticBody(), p0, p1, edgeRadius)
-		goal.SetLayers(goalLayer)
+		p0, p1 := cp.Vector{sign * hfw, -hgs}, cp.Vector{sign * hfw, hgs}
+		goal := cp.NewSegment(g.space.StaticBody, p0, p1, edgeRadius)
+		goal.SetCollisionType(goalType)
 		goal.SetElasticity(1.0)
 		goal.SetFriction(1.0)
 		g.space.AddShape(goal)
 	}
-	moment := chipmunk.MomentForCircle(ballMass, 0, ballRadius, chipmunk.Vect{})
-	g.ball.body = chipmunk.BodyNew(ballMass, moment)
+	moment := cp.MomentForCircle(ballMass, 0, ballRadius, cp.Vector{})
+	g.ball.body = cp.NewBody(ballMass, moment)
 	g.space.AddBody(g.ball.body)
-	g.ball.shape = chipmunk.CircleShapeNew(g.ball.body, ballRadius, chipmunk.Vect{})
-	g.ball.shape.SetLayers(normLayer)
-	g.ball.shape.SetElasticity(0.9)
-	g.ball.shape.SetFriction(0.1)
+	g.ball.shape = cp.NewCircle(g.ball.body, ballRadius, cp.Vector{})
+	g.ball.shape.SetCollisionType(normType)
+	g.ball.shape.SetElasticity(1.0)
+	g.ball.shape.SetFriction(1.0)
 	g.space.AddShape(g.ball.shape)
+
+	handler := g.space.NewCollisionHandler(normType, goalType)
+	handler.BeginFunc = func(arb *cp.Arbiter, space *cp.Space, data interface{}) bool { return false }
 }
 
 func (g *Gol) Run() {
@@ -224,11 +228,11 @@ func (g *Gol) handleGoals() {
 func (g *Gol) kickoff(team int) {
 	otherTeam := 1 - team
 
-	g.ball.body.SetPosition(chipmunk.Vect{})
-	g.ball.body.SetVelocity(chipmunk.Vect{})
+	g.ball.body.SetPosition(cp.Vector{})
+	g.ball.body.SetVelocityVector(cp.Vector{})
 	for _, player := range g.players {
 		player.place()
-		player.body.SetVelocity(chipmunk.Vect{})
+		player.body.SetVelocityVector(cp.Vector{})
 		player.enableCursorJoint(false) // disable control for a bit
 	}
 	// give the team that was scored on a little head start for "kickoff"
@@ -263,19 +267,19 @@ func (g *Gol) nextTeam() int {
 func (g *Gol) addPlayer(id gordian.ClientId) *player {
 	player := &player{id: id, team: g.nextTeam()}
 
-	moment := chipmunk.MomentForCircle(playerMass, 0, playerRadius, chipmunk.Vect{})
-	player.body = chipmunk.BodyNew(playerMass, moment)
+	moment := cp.MomentForCircle(playerMass, 0, playerRadius, cp.Vector{})
+	player.body = cp.NewBody(playerMass, moment)
 	g.space.AddBody(player.body)
 
-	player.shape = chipmunk.CircleShapeNew(player.body, playerRadius, chipmunk.Vect{})
-	player.shape.SetLayers(normLayer | goalLayer)
-	player.shape.SetElasticity(0.9)
-	player.shape.SetFriction(0.1)
+	player.shape = cp.NewCircle(player.body, playerRadius, cp.Vector{})
+	player.shape.SetCollisionType(normType | goalType)
+	player.shape.SetElasticity(1.0)
+	player.shape.SetFriction(1.0)
 	g.space.AddShape(player.shape)
 
-	player.cursorBody = chipmunk.BodyNew(math.Inf(0), math.Inf(0))
-	player.cursorJoint = chipmunk.PivotJointNew2(player.cursorBody, player.body,
-		chipmunk.Vect{}, chipmunk.Vect{})
+	player.cursorBody = cp.NewBody(math.Inf(0), math.Inf(0))
+	player.cursorJoint = cp.NewPivotJoint2(player.cursorBody, player.body,
+		cp.Vector{}, cp.Vector{})
 	player.cursorJoint.SetMaxForce(1000.0)
 	player.enableCursorJoint(true)
 
@@ -290,12 +294,8 @@ func (g *Gol) removePlayer(id gordian.ClientId) {
 		return
 	}
 	player.enableCursorJoint(false)
-	player.cursorJoint.Free()
 	g.space.RemoveBody(player.body)
 	g.space.RemoveShape(player.shape)
-	player.body.Free()
-	player.shape.Free()
-	player.cursorBody.Free()
 
 	delete(g.players, id)
 }
@@ -324,6 +324,7 @@ func (g *Gol) connect(client *gordian.Client) {
 		GoalSize:     goalSize,
 		PlayerRadius: playerRadius,
 		BallRadius:   ballRadius,
+		EdgeRadius:   edgeRadius,
 		Id:           fmt.Sprintf("%d", client.Id),
 	}
 	msg := gordian.Message{

@@ -1,142 +1,118 @@
 var players = {};
-var state = { Pos: { X: 0, Y: 0 } };
-var stage;
-var layer;
+var localState = { pos: { x: 0.0, y: 0.0 } };
 var ball;
-var me;
 var config;
-var scoreboard = [];
-var teamColor = ['red', 'blue'];
+var score = [ 0, 0 ];
+var teamColor = ["red", "blue"];
+var field = document.getElementById("field");
+
+field.addEventListener("mousemove", mousePos);
+field.addEventListener("touchstart", touchPos, true);
+field.addEventListener("touchmove", touchPos, true);
 
 function setup(conf) {
 	config = conf;
-	stage = new Kinetic.Stage({
-		container: 'container',
-		width: conf.FieldWidth,
-		height: conf.FieldHeight + 100,
-		scale: { x: 1, y: -1 },
-		offset: { x: -conf.FieldWidth / 2, y: conf.FieldHeight / 2 }
-	});
-	layer = new Kinetic.Layer();
+	resizeField();
+}
 
-	var hfw = conf.FieldWidth / 2 - 4;
-	var hfh = conf.FieldHeight / 2 - 4;
-	var hgh = conf.GoalSize / 2 - 4;
+function resizeField() {
+	var w = window.innerWidth;
+	var h = window.innerHeight;
+	var aspRat = field.width / field.height;
+	var winAspRat = w / h;
+	if (winAspRat > aspRat) {
+		w *= aspRat / winAspRat;
+	} else {
+		h *= winAspRat / aspRat ;
+	}
+	field.width = w;
+	field.height = h;
+}
 
-	// field
-	layer.add(new Kinetic.Rect({
-		x: -hfw,
-		y: -hfh,
-		width: 2 * hfw,
-		height: 2 * hfh,
-		fill: 'green',
-		stroke: 'black',
-		strokeWidth: 8
-	}));
+function draw() {
+	var ctx = field.getContext("2d");
+
+	var cw = field.width;
+	var ch = field.height;
+	var fw = config.FieldWidth;
+	var fh = config.FieldHeight;
+	var gs = config.GoalSize;
+	var er = config.EdgeRadius;
+
+	ctx.save();
+
+    ctx.translate(0.5 * cw, 0.5 * ch);
+	ctx.scale(cw / (fw + 2 * er), -ch / (fh + 2 * er));
+
+	ctx.lineWidth = 2 * er;
+	ctx.fillStyle = "green";
+	ctx.fillRect(-0.5 * fw, -0.5 * fh, fw, fh);
+	ctx.strokeStyle = "white";
+
+	// touch
+	ctx.strokeRect(-0.5 * fw, -0.5 * fh, fw, fh);
 
 	// center circle
-	layer.add(new Kinetic.Circle({
-		radius: conf.FieldHeight / 4,
-		stroke: 'white',
-		strokeWidth: 4
-	}));
+	ctx.beginPath();
+	ctx.arc(0.0, 0.0, 0.5 * gs, 0.0, 2.0 * Math.PI);
+	ctx.stroke();
 
-	// midfield line
-	layer.add(new Kinetic.Line({
-		points: [0, -hfh, 0, hfh],
-		stroke: 'white',
-		strokeWidth: 4
-	}));
+	// midfield
+	ctx.beginPath();
+	ctx.moveTo(0.0, -0.5 * fh);
+	ctx.lineTo(0.0, 0.5 * fh);
+	ctx.stroke();
 
-	// touch line
-	for (var i = 0; i < 2; i++) {
-		var s = 2 * i - 1;
-		layer.add(new Kinetic.Line({
-			points: [
-				-hfw, s * hgh,
-				-hfw, s * hfh,
-				hfw, s * hfh,
-				hfw, s * hgh
-			],
-			stroke: 'white',
-			strokeWidth: 4
-		}));
-	}
-
-	// goal box
+	// penalty box
 	for (i = 0; i < 2; i++) {
-		s = 2 * i - 1;
-		layer.add(new Kinetic.Line({
-			points: [
-				s * hfw, -(hgh + 2),
-				s * (hfw - hgh), -(hgh + 2),
-				s * (hfw - hgh), (hgh + 2),
-				s * hfw, (hgh + 2)
-			],
-			stroke: 'white',
-			strokeWidth: 4
-		}));
+		var side = 2 * i - 1;
+		ctx.strokeRect(side * 0.5 * fw, -0.5 * gs, side * -0.5 * gs, gs);
 	}
 
 	// goal line
 	for (i = 0; i < 2; i++) {
-		s = 2 * i - 1;
-		layer.add(new Kinetic.Line({
-			points: [s * hfw, -(hgh - 2), s * hfw, (hgh - 2)],
-			stroke: teamColor[i],
-			strokeWidth: 4
-		}));
+		var side = 2 * i - 1;
+		ctx.strokeStyle = teamColor[i];
+		ctx.beginPath();
+		ctx.moveTo(side * 0.5 * fw, -0.5 * (gs - 2 * er));
+		ctx.lineTo(side * 0.5 * fw, 0.5 * (gs - 2 * er));
+		ctx.stroke();
+	}
+
+	ctx.lineWidth = 1;
+
+	// score
+	ctx.fillStyle = "white";
+	ctx.textAlign = "center";
+	ctx.textBaseline = "middle";
+	ctx.save();
+	ctx.globalAlpha = 0.25;
+	ctx.scale(1.0, -1.0);
+	for (i = 0; i < 2; i++) {
+		var side = 2 * i - 1;
+		ctx.font = (0.25 * fh) + "px sans";
+		ctx.fillText(score[i], side * 0.25 * fw, 0.0);
+	}
+	ctx.restore();
+
+	// players
+	for (var id in players) {
+		ctx.strokeStyle = "black";
+		ctx.fillStyle = teamColor[players[id].Team];
+		ctx.beginPath();
+		ctx.arc(players[id].Pos.X, players[id].Pos.Y, config.PlayerRadius, 0.0, 2.0 * Math.PI);
+		ctx.fill();
+		ctx.stroke();
 	}
 
 	// ball
-	ball = new Kinetic.Circle({
-		radius: conf.BallRadius,
-		fill: 'white',
-		stroke: 'black',
-		strokeWidth: 4
-	});
-	layer.add(ball);
+	ctx.fillStyle = "white";
+	ctx.beginPath();
+	ctx.arc(ball.Pos.X, ball.Pos.Y, config.BallRadius, 0.0, 2.0 * Math.PI);
+	ctx.fill();
+	ctx.stroke();
 
-	// local player marker
-	me = new Kinetic.Circle({
-		x: 0,
-		y: 0,
-		radius: 4,
-		fill: 'white'
-	});
-	layer.add(me);
-
-	// score
-	for (i = 0; i < 2; i++) {
-		var text = new Kinetic.Text({
-			fontSize: 72,
-			fontFamily: 'monospace',
-			x: 100 * (2 * i - 1) - 50,
-			y: -conf.FieldHeight / 2 - 15,
-			width: 100,
-			height: 85,
-			text: '0',
-			align: 'center',
-			stroke: 'black',
-			fill: teamColor[i],
-			scale: { x: 1, y: -1 }
-		});
-		scoreboard.push(text);
-		layer.add(text);
-	}
-
-	stage.add(layer);
-	anim();
-}
-
-function newPlayer(team) {
-	var color = teamColor[team];
-	var player = new Kinetic.Circle({
-		radius: config.PlayerRadius,
-		fill: color,
-		strokeWidth: 4
-	});
-	return player;
+	ctx.restore();
 }
 
 var ws = new WebSocket("ws://" + window.location.host + "/gol/");
@@ -147,66 +123,55 @@ ws.onmessage = function(evt) {
 		setup(msg.data);
 		break;
 	case "state":
-		updatePlayers(msg.data.Players);
-		updateBall(msg.data.Ball);
-		updateScore(msg.data.Score);
-		sendState();
+		updateGameState(msg.data);
+		sendLocalState();
+		draw();
 		break;
 	default:
 		break;
 	}
 };
 
-function updatePlayers(curPlayers) {
-	for (var id in curPlayers) {
-		if (!(id in players)) {
-			var p = newPlayer(curPlayers[id].Team);
-			players[id] = p;
-			layer.add(p);
-		}
-		var x = curPlayers[id].Pos.X;
-		var y = curPlayers[id].Pos.Y;
-		players[id].position({x: x, y: y});
-		if (id == config.Id) {
-			me.position({x: x, y: y});
-			me.moveToTop();
-		}
-	}
-	for (id in players) {
-		if (!(id in curPlayers)) {
-			players[id].remove();
-			delete players[id];
-		}
-	}
+function updateGameState(gameState) {
+	players = JSON.parse(JSON.stringify(gameState.Players));
+	ball = gameState.Ball;
+	score = gameState.Score;
 }
 
-function updateBall(bal) {
-	ball.position({x: bal.Pos.X, y: bal.Pos.Y});
+function sendLocalState() {
+	ws.send(JSON.stringify({ type: "player", data: localState }));
 }
 
-function updateScore(score) {
-	for (var idx in score) {
-		scoreboard[idx].text(score[idx]);
+function mousePos(evt) {
+	fieldPos(evt.clientX, evt.clientY);
+}
+
+function touchPos(evt) {
+	evt.preventDefault();
+    var touch = evt.touches[0];
+	fieldpos(touch.clientX, touch.clientY);
+}
+
+function fieldPos(px, py) {
+	var rect = field.getBoundingClientRect();
+	var cw = field.width;
+	var ch = field.height;
+	var fw = config.FieldWidth;
+	var fh = config.FieldHeight;
+	var er = config.EdgeRadius;
+
+	var x = ((px - rect.left) / cw - 0.5) * (fw + er);
+	if (x < -0.5 * fw) {
+		x = -0.5 * fw;
+	} else if (x > 0.5 * fw) {
+		x = 0.5 * fw;
 	}
-}
-
-function sendState() {
-	var pos = stage.getPointerPosition();
-	if (pos) {
-		state.Pos = {
-			X: pos.x - config.FieldWidth / 2,
-			Y: config.FieldHeight / 2 - pos.y
-		};
+	var y = (0.5 - (py - rect.top) / ch) * (fh + er);
+	if (y < -0.5 * fh) {
+		y = -0.5 * fh;
+	} else if (y > 0.5 * fh) {
+		y = 0.5 * fh;
 	}
-	var msg = {
-		type: 'player',
-		data: state
-	};
-	ws.send(JSON.stringify(msg));
-}
-
-function anim() {
-	requestAnimationFrame(anim);
-	console.log("draw");
-	stage.draw();
+	localState.pos.x = x;
+    localState.pos.y = y;
 }

@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/ianremmler/gol"
-	"code.google.com/p/go.net/websocket"
 
 	"go/build"
 	"math/rand"
@@ -17,7 +16,7 @@ func main() {
 	gol.Run()
 
 	clientDir := build.Default.GOPATH + "/src/github.com/ianremmler/gol/client"
-	http.Handle("/gol/", websocket.Handler(gol.WSHandler))
+	http.HandleFunc("/gol/", gol.WSHandler)
 	http.Handle("/", http.FileServer(http.Dir(clientDir)))
 	port := ":8000"
 	if len(os.Args) > 1 {
