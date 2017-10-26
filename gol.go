@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	simTime       = time.Second / 60
-	updateTime    = time.Second / 30
+	frameRate     = 30
+	simTime       = time.Second / (2 * frameRate)
+	updateTime    = time.Second / frameRate
 	pauseTime     = time.Second
 	headStartTime = time.Second
 	maxScore      = 10
@@ -118,7 +119,7 @@ func New() *Gol {
 		pauseTicks:  []int{0, 0},
 		simTimer:    time.Tick(simTime),
 		updateTimer: time.Tick(updateTime),
-		Gordian:     gordian.New(24),
+		Gordian:     gordian.New(frameRate), // buffer max 1 second
 	}
 	g.setup()
 	return g

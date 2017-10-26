@@ -7,8 +7,7 @@ var teamColor = ["red", "blue"];
 var field = document.getElementById("field");
 
 field.addEventListener("mousemove", mousePos);
-field.addEventListener("touchstart", touchPos, true);
-field.addEventListener("touchmove", touchPos, true);
+document.body.onresize = resizeField;
 
 function setup(conf) {
 	config = conf;
