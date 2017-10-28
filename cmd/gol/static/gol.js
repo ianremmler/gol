@@ -7,7 +7,7 @@ var teamColor = ["red", "blue"];
 var field = document.getElementById("field");
 
 field.addEventListener("mousemove", mousePos);
-document.body.onresize = resizeField;
+window.addEventListener("resize", resizeField);
 
 function setup(conf) {
 	config = conf;
@@ -17,7 +17,7 @@ function setup(conf) {
 function resizeField() {
 	var w = window.innerWidth;
 	var h = window.innerHeight;
-	var aspRat = field.width / field.height;
+	var aspRat = config.FieldWidth / config.FieldHeight;
 	var winAspRat = w / h;
 	if (winAspRat > aspRat) {
 		w *= aspRat / winAspRat;
@@ -110,6 +110,9 @@ function draw() {
 	ctx.arc(ball.Pos.X, ball.Pos.Y, config.BallRadius, 0.0, 2.0 * Math.PI);
 	ctx.fill();
 	ctx.stroke();
+
+	// outline
+	ctx.strokeRect(-0.5 * fw - er, -0.5 * fh - er, fw + 2 * er, fh + 2 * er);
 
 	ctx.restore();
 }
