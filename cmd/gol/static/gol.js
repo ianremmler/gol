@@ -99,9 +99,17 @@ function draw() {
 		ctx.strokeStyle = "black";
 		ctx.fillStyle = teamColor[players[id].Team];
 		ctx.beginPath();
-		ctx.arc(players[id].Pos.X, players[id].Pos.Y, config.PlayerRadius, 0.0, 2.0 * Math.PI);
+		var pos = players[id].Pos;
+		var rad = config.PlayerRadius;
+		ctx.arc(pos.X, pos.Y, rad, 0.0, 2.0 * Math.PI);
 		ctx.fill();
 		ctx.stroke();
+		if (id == config.Id) {
+			ctx.fillStyle = "yellow";
+			ctx.beginPath();
+			ctx.arc(pos.X, pos.Y, 0.5 * rad, 0.0, 2.0 * Math.PI);
+			ctx.fill();
+		}
 	}
 
 	// ball
