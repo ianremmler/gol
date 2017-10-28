@@ -3,17 +3,6 @@ Gol is a simple multiplayer web-based soccer game.
 New players are assigned to a random team if the count is even, or to the team
 with fewer players otherwise.  Each team tries to bounce the ball into the
 opponent's goal.  When a team scores a goal, the ball is returned to the center
-and the players are placed randomly on their respective sides.  The team that
-was scored on gets a slight head start when play resumes.  Once one team
-reaches 100 points, the scores are reset to 0 and a new game begins.
-
-Gol depends on the C Chipmunk Physics library, and has been tested with
-version 6.1.4 available at:
-
-  http://chipmunk-physics.net/release/Chipmunk-6.x/Chipmunk-6.1.4.tgz
-
-If Chipmunk is installed in a nonstandard location, you need to set environment
-variables to tell Go where to find it:
-
-  CGO_CFLAGS=-I/path/to/chipmunk/includes
-  CGO_LDFLAGS=-L/path/to/chipmunk/library
+and the players are placed randomly on their respective sides.  The scoring
+team may not enter the center circle until the other team kicks off.  Once one
+team reaches 10 points, the scores are reset to 0 and a new game begins.
