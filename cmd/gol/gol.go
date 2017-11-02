@@ -14,10 +14,10 @@ import (
 
 func main() {
 	rand.Seed(time.Now().UTC().UnixNano())
-	gol := gol.New()
-	gol.Run()
+	g := gol.New()
+	g.Run()
 
-	http.Handle("/gol/", gol)
+	http.Handle("/gol/", g)
 	http.Handle("/", http.FileServer(FS(false)))
 	port := ":8000"
 	if len(os.Args) > 1 {
