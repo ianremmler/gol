@@ -28,18 +28,20 @@ const (
 )
 
 const (
-	fieldType = iota
-	circleType
-	ballType
-	goalType
-	team0Type
-	team1Type
+	ballType = iota + 1
+)
+
+const (
+	circleCat = 1 << iota
+	ballCat
+	goalCat
+	team0Cat
+	team1Cat
 )
 
 type player struct {
 	id          gordian.ClientId
 	team        int
-	body        *cp.Body
 	shape       *cp.Shape
 	cursorBody  *cp.Body
 	cursorJoint *cp.Constraint
@@ -58,7 +60,7 @@ func (p *player) place() {
 	if dist < minDist {
 		pos = pos.Mult(minDist / dist)
 	}
-	p.body.SetPosition(pos)
+	p.shape.Body().SetPosition(pos)
 }
 
 func (p *player) enableCursorJoint(enable bool) {
@@ -70,11 +72,6 @@ func (p *player) enableCursorJoint(enable bool) {
 	case !enable && isEnabled:
 		sp.RemoveConstraint(p.cursorJoint)
 	}
-}
-
-type ball struct {
-	body  *cp.Body
-	shape *cp.Shape
 }
 
 type Player struct {
@@ -103,15 +100,15 @@ type stateMsg struct {
 }
 
 type Gol struct {
-	players     map[gordian.ClientId]*player
-	ball        ball
-	score       []int
-	pauseTicks  int
-	simTimer    <-chan time.Time
-	updateTimer <-chan time.Time
-	curId       int
-	space       *cp.Space
-	goalTeam    int
+	players      map[gordian.ClientId]*player
+	score        []int
+	pauseTicks   int
+	simTimer     <-chan time.Time
+	updateTimer  <-chan time.Time
+	curId        int
+	ball         *cp.Shape
+	centerCircle *cp.Shape
+	space        *cp.Space
 	sync.Mutex
 	*gordian.Gordian
 }
@@ -122,7 +119,6 @@ func New() *Gol {
 		score:       []int{0, 0},
 		simTimer:    time.Tick(simTime),
 		updateTimer: time.Tick(updateTime),
-		goalTeam:    rand.Intn(2),
 		Gordian:     gordian.New(frameRate), // buffer max 1 second
 	}
 	g.setup()
@@ -142,48 +138,40 @@ func (g *Gol) setup() {
 			p0.Y *= sign
 			p1.Y *= sign
 			fieldSeg := cp.NewSegment(g.space.StaticBody, p0, p1, edgeRadius)
-			fieldSeg.SetCollisionType(fieldType)
 			fieldSeg.SetElasticity(1.0)
 			fieldSeg.SetFriction(1.0)
 			g.space.AddShape(fieldSeg)
 		}
 		p0, p1 := cp.Vector{sign * hfw, -hgs}, cp.Vector{sign * hfw, hgs}
 		goal := cp.NewSegment(g.space.StaticBody, p0, p1, edgeRadius)
-		goal.SetCollisionType(goalType)
+		goal.Filter.Categories = goalCat
 		goal.SetElasticity(1.0)
 		goal.SetFriction(1.0)
 		g.space.AddShape(goal)
 	}
-	centerCircle := cp.NewCircle(g.space.StaticBody, 0.5*goalSize+edgeRadius, cp.Vector{})
-	centerCircle.SetCollisionType(circleType)
-	centerCircle.SetElasticity(1.0)
-	centerCircle.SetFriction(1.0)
-	g.space.AddShape(centerCircle)
+	g.centerCircle = cp.NewCircle(g.space.StaticBody, 0.5*goalSize+edgeRadius, cp.Vector{})
+	g.centerCircle.Filter.Categories = circleCat
+	g.centerCircle.Filter.Mask = 0
+	g.centerCircle.SetElasticity(1.0)
+	g.centerCircle.SetFriction(1.0)
+	g.space.AddShape(g.centerCircle)
 
 	moment := cp.MomentForCircle(ballMass, 0, ballRadius, cp.Vector{})
-	g.ball.body = cp.NewBody(ballMass, moment)
-	g.space.AddBody(g.ball.body)
-	g.ball.shape = cp.NewCircle(g.ball.body, ballRadius, cp.Vector{})
-	g.ball.shape.SetCollisionType(ballType)
-	g.ball.shape.SetElasticity(1.0)
-	g.ball.shape.SetFriction(1.0)
-	g.space.AddShape(g.ball.shape)
+	body := cp.NewBody(ballMass, moment)
+	g.space.AddBody(body)
+	g.ball = cp.NewCircle(body, ballRadius, cp.Vector{})
+	g.ball.SetCollisionType(ballType)
+	g.ball.Filter.Categories = ballCat
+	g.ball.Filter.Mask &^= goalCat
+	g.ball.SetElasticity(1.0)
+	g.ball.SetFriction(1.0)
+	g.space.AddShape(g.ball)
 
-	g.space.NewCollisionHandler(ballType, goalType).BeginFunc = noCollide
-	g.space.NewCollisionHandler(ballType, circleType).BeginFunc = noCollide
-	for _, colType := range []cp.CollisionType{team0Type, team1Type} {
-		ct := colType
-		g.space.NewCollisionHandler(colType, circleType).BeginFunc =
-			func(arb *cp.Arbiter, space *cp.Space, data interface{}) bool {
-				return len(g.players) > 1 && g.goalTeam >= 0 &&
-					ct == cp.CollisionType(team0Type+g.goalTeam)
-			}
-		g.space.NewCollisionHandler(colType, ballType).BeginFunc =
-			func(arb *cp.Arbiter, space *cp.Space, data interface{}) bool {
-				g.goalTeam = -1
-				return true
-			}
-	}
+	g.space.NewWildcardCollisionHandler(ballType).BeginFunc =
+		func(arb *cp.Arbiter, space *cp.Space, data interface{}) bool {
+			g.centerCircle.Filter.Mask = 0
+			return true
+		}
 }
 
 func (g *Gol) Run() {
@@ -233,7 +221,7 @@ func (g *Gol) handlePauses() {
 }
 
 func (g *Gol) handleGoals() {
-	ballX := g.ball.body.Position().X
+	ballX := g.ball.Body().Position().X
 	if math.Abs(ballX) > fieldWidth/2 { // GOL!
 		team := 0
 		if ballX < 0 {
@@ -242,21 +230,22 @@ func (g *Gol) handleGoals() {
 		g.score[team]++
 		if g.score[0] >= maxScore || g.score[1] >= maxScore {
 			g.score[0], g.score[1] = 0, 0
-			g.goalTeam = rand.Intn(2)
-		} else {
-			g.goalTeam = team
+			team = rand.Intn(2)
 		}
-		g.kickoff(g.goalTeam)
+		g.kickoff(team)
 	}
 }
 
 func (g *Gol) kickoff(team int) {
-	g.ball.body.SetPosition(cp.Vector{})
-	g.ball.body.SetVelocityVector(cp.Vector{})
+	g.ball.Body().SetPosition(cp.Vector{})
+	g.ball.Body().SetVelocityVector(cp.Vector{})
 	for _, player := range g.players {
 		player.place()
-		player.body.SetVelocityVector(cp.Vector{})
+		player.shape.Body().SetVelocityVector(cp.Vector{})
 		player.enableCursorJoint(false) // disable control for a bit
+	}
+	if len(g.players) > 1 {
+		g.centerCircle.Filter.Mask |= team0Cat << uint(team)
 	}
 	g.pauseTicks = int(pauseTime / simTime)
 }
@@ -289,18 +278,18 @@ func (g *Gol) addPlayer(id gordian.ClientId) *player {
 	player := &player{id: id, team: g.nextTeam()}
 
 	moment := cp.MomentForCircle(playerMass, 0, playerRadius, cp.Vector{})
-	player.body = cp.NewBody(playerMass, moment)
-	g.space.AddBody(player.body)
+	body := cp.NewBody(playerMass, moment)
+	g.space.AddBody(body)
 
-	player.shape = cp.NewCircle(player.body, playerRadius, cp.Vector{})
-	player.shape.SetCollisionType(cp.CollisionType(team0Type + player.team))
+	player.shape = cp.NewCircle(body, playerRadius, cp.Vector{})
+	player.shape.Filter.Categories = team0Cat << uint(player.team)
 	player.shape.SetElasticity(1.0)
 	player.shape.SetFriction(1.0)
 	g.space.AddShape(player.shape)
 
 	player.cursorBody = cp.NewBody(math.Inf(0), math.Inf(0))
 	player.cursorJoint =
-		cp.NewPivotJoint2(player.cursorBody, player.body, cp.Vector{}, cp.Vector{})
+		cp.NewPivotJoint2(player.cursorBody, body, cp.Vector{}, cp.Vector{})
 	player.cursorJoint.SetMaxForce(1000.0)
 	player.enableCursorJoint(true)
 
@@ -315,10 +304,13 @@ func (g *Gol) removePlayer(id gordian.ClientId) {
 		return
 	}
 	player.enableCursorJoint(false)
-	g.space.RemoveBody(player.body)
+	g.space.RemoveBody(player.shape.Body())
 	g.space.RemoveShape(player.shape)
 
 	delete(g.players, id)
+	if len(g.players) < 2 {
+		g.centerCircle.Filter.Mask = 0
+	}
 }
 
 func (g *Gol) connect(client *gordian.Client) {
@@ -387,12 +379,12 @@ func (g *Gol) update() {
 
 	state := stateMsg{
 		Players: map[string]Player{},
-		Ball:    Ball{g.ball.body.Position()},
+		Ball:    Ball{g.ball.Body().Position()},
 		Score:   g.score,
 	}
 	for i, player := range g.players {
 		state.Players[fmt.Sprintf("%d", i)] = Player{
-			Pos:  player.body.Position(),
+			Pos:  player.shape.Body().Position(),
 			Team: player.team,
 		}
 	}
@@ -407,8 +399,4 @@ func (g *Gol) update() {
 		msg.To = id
 		g.OutBox <- msg
 	}
-}
-
-func noCollide(arb *cp.Arbiter, space *cp.Space, data interface{}) bool {
-	return false
 }
