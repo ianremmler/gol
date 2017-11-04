@@ -5,9 +5,27 @@ var config;
 var score = [ 0, 0 ];
 var teamColor = ["red", "blue"];
 var field = document.getElementById("field");
+var ws = new WebSocket("ws://" + window.location.host + "/gol/");
 
-field.addEventListener("mousemove", mousePos);
 window.addEventListener("resize", resizeField);
+field.addEventListener("mousemove", mousePos);
+ws.addEventListener("message", handleMessage);
+
+function handleMessage(evt) {
+	msg = JSON.parse(evt.data);
+	switch (msg.type) {
+	case "config":
+		setup(msg.data);
+		break;
+	case "state":
+		updateGameState(msg.data);
+		draw();
+		sendLocalState();
+		break;
+	default:
+		break;
+	}
+};
 
 function setup(conf) {
 	config = conf;
@@ -17,12 +35,12 @@ function setup(conf) {
 function resizeField() {
 	var w = window.innerWidth;
 	var h = window.innerHeight;
-	var aspRat = config.FieldWidth / config.FieldHeight;
+	var fieldAspRat = config.FieldWidth / config.FieldHeight;
 	var winAspRat = w / h;
-	if (winAspRat > aspRat) {
-		w *= aspRat / winAspRat;
+	if (winAspRat > fieldAspRat) {
+		w *= fieldAspRat / winAspRat;
 	} else {
-		h *= winAspRat / aspRat ;
+		h *= winAspRat / fieldAspRat ;
 	}
 	field.width = w;
 	field.height = h;
@@ -30,7 +48,6 @@ function resizeField() {
 
 function draw() {
 	var ctx = field.getContext("2d");
-
 	var cw = field.width;
 	var ch = field.height;
 	var fw = config.FieldWidth;
@@ -39,14 +56,28 @@ function draw() {
 	var er = config.EdgeRadius;
 
 	ctx.save();
+	ctx.translate(0.5 * cw, 0.5 * ch);
+	ctx.scale(cw / (fw + 2.0 * er), -ch / (fh + 2.0 * er));
 
-    ctx.translate(0.5 * cw, 0.5 * ch);
-	ctx.scale(cw / (fw + 2 * er), -ch / (fh + 2 * er));
-
-	ctx.lineWidth = 2 * er;
+	// field
+	ctx.lineWidth = 2.0 * er;
 	ctx.fillStyle = "green";
 	ctx.fillRect(-0.5 * fw, -0.5 * fh, fw, fh);
 	ctx.strokeStyle = "white";
+
+	// score
+	ctx.save();
+	ctx.fillStyle = "white";
+	ctx.textAlign = "center";
+	ctx.textBaseline = "middle";
+	ctx.globalAlpha = 0.25;
+	ctx.scale(1.0, -1.0);
+	ctx.font = (0.25 * fh) + "px sans";
+	for (i = 0; i < 2; i++) {
+		var side = 2 * i - 1;
+		ctx.fillText(score[i], side * 0.25 * fw, 0.0);
+	}
+	ctx.restore();
 
 	// touch
 	ctx.strokeRect(-0.5 * fw, -0.5 * fh, fw, fh);
@@ -80,20 +111,6 @@ function draw() {
 
 	ctx.lineWidth = 1;
 
-	// score
-	ctx.fillStyle = "white";
-	ctx.textAlign = "center";
-	ctx.textBaseline = "middle";
-	ctx.save();
-	ctx.globalAlpha = 0.25;
-	ctx.scale(1.0, -1.0);
-	for (i = 0; i < 2; i++) {
-		var side = 2 * i - 1;
-		ctx.font = (0.25 * fh) + "px sans";
-		ctx.fillText(score[i], side * 0.25 * fw, 0.0);
-	}
-	ctx.restore();
-
 	// players
 	for (var id in players) {
 		ctx.strokeStyle = "black";
@@ -125,25 +142,8 @@ function draw() {
 	ctx.restore();
 }
 
-var ws = new WebSocket("ws://" + window.location.host + "/gol/");
-ws.onmessage = function(evt) {
-	msg = JSON.parse(evt.data);
-	switch (msg.type) {
-	case "config":
-		setup(msg.data);
-		break;
-	case "state":
-		updateGameState(msg.data);
-		sendLocalState();
-		draw();
-		break;
-	default:
-		break;
-	}
-};
-
 function updateGameState(gameState) {
-	players = JSON.parse(JSON.stringify(gameState.Players));
+	players = gameState.Players;
 	ball = gameState.Ball;
 	score = gameState.Score;
 }
@@ -156,32 +156,25 @@ function mousePos(evt) {
 	fieldPos(evt.clientX, evt.clientY);
 }
 
-function touchPos(evt) {
-	evt.preventDefault();
-    var touch = evt.touches[0];
-	fieldpos(touch.clientX, touch.clientY);
-}
-
 function fieldPos(px, py) {
-	var rect = field.getBoundingClientRect();
+	var bb = field.getBoundingClientRect();
+	var cx = px - bb.left;
+	var cy = py - bb.top;
 	var cw = field.width;
 	var ch = field.height;
 	var fw = config.FieldWidth;
 	var fh = config.FieldHeight;
 	var er = config.EdgeRadius;
 
-	var x = ((px - rect.left) / cw - 0.5) * (fw + er);
-	if (x < -0.5 * fw) {
-		x = -0.5 * fw;
-	} else if (x > 0.5 * fw) {
-		x = 0.5 * fw;
+	localState.pos.x = clamp((cx / cw - 0.5) * (fw + 2.0 * er), -0.5 * fw, 0.5 * fw);
+	localState.pos.y = clamp(-(cy / ch - 0.5) * (fh + 2.0 * er), -0.5 * fh, 0.5 * fh);
+}
+
+function clamp(val, min, max) {
+	if (val < min) {
+		val = min;
+	} else if (val > max) {
+		val = max;
 	}
-	var y = (0.5 - (py - rect.top) / ch) * (fh + er);
-	if (y < -0.5 * fh) {
-		y = -0.5 * fh;
-	} else if (y > 0.5 * fh) {
-		y = 0.5 * fh;
-	}
-	localState.pos.x = x;
-    localState.pos.y = y;
+	return val;
 }
