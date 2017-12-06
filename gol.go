@@ -32,7 +32,7 @@ const (
 )
 
 const (
-	circleCat = 1 << iota
+	fieldCat = 1 << iota
 	ballCat
 	goalCat
 	team0Cat
@@ -107,6 +107,7 @@ type Gol struct {
 	updateTimer  <-chan time.Time
 	curId        int
 	ball         *cp.Shape
+	centerLine   *cp.Shape
 	centerCircle *cp.Shape
 	space        *cp.Space
 	sync.Mutex
@@ -149,8 +150,17 @@ func (g *Gol) setup() {
 		goal.SetFriction(1.0)
 		g.space.AddShape(goal)
 	}
+
+	g.centerLine = cp.NewSegment(g.space.StaticBody, cp.Vector{0.0, -0.5 * fieldHeight},
+		cp.Vector{0.0, 0.5 * fieldHeight}, edgeRadius)
+	g.centerLine.Filter.Categories = fieldCat
+	g.centerLine.Filter.Mask = 0
+	g.centerLine.SetElasticity(1.0)
+	g.centerLine.SetFriction(1.0)
+	g.space.AddShape(g.centerLine)
+
 	g.centerCircle = cp.NewCircle(g.space.StaticBody, 0.5*goalSize+edgeRadius, cp.Vector{})
-	g.centerCircle.Filter.Categories = circleCat
+	g.centerCircle.Filter.Categories = fieldCat
 	g.centerCircle.Filter.Mask = 0
 	g.centerCircle.SetElasticity(1.0)
 	g.centerCircle.SetFriction(1.0)
@@ -169,6 +179,7 @@ func (g *Gol) setup() {
 
 	g.space.NewWildcardCollisionHandler(ballType).BeginFunc =
 		func(arb *cp.Arbiter, space *cp.Space, data interface{}) bool {
+			g.centerLine.Filter.Mask = 0
 			g.centerCircle.Filter.Mask = 0
 			return true
 		}
@@ -244,8 +255,9 @@ func (g *Gol) kickoff(team int) {
 		player.shape.Body().SetVelocityVector(cp.Vector{})
 		player.enableCursorJoint(false) // disable control for a bit
 	}
+	g.centerLine.Filter.Mask = team0Cat | team1Cat
 	if len(g.players) > 1 {
-		g.centerCircle.Filter.Mask |= team0Cat << uint(team)
+		g.centerCircle.Filter.Mask = team0Cat << uint(team)
 	}
 	g.pauseTicks = int(pauseTime / simTime)
 }
